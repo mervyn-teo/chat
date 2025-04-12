@@ -1,5 +1,3 @@
 # chat
-a open source chat program that a noob created
+Discord chatbot with AI integration
 
-6/6/16
-started with no knowledge of anything

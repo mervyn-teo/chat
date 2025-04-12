@@ -18,7 +18,7 @@ import (
 // --- OpenRouter Configuration ---
 const (
 	openRouterBaseURL = "https://openrouter.ai/api/v1"
-	openRouterModel   = "openai/gpt-4o"     // Example
+	openRouterModel   = "deepseek/deepseek-r1:free"     // Example
 	refererURL        = "http://localhost"  // Replace if needed
 	appTitle          = "Go OpenRouter CLI" // Replace if needed
 )
