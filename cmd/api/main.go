@@ -31,7 +31,7 @@ func init() {
 
 func main() {
 	// Shared channel for communication between bot and router
-	messageChannel := make(chan discordgo.MessageCreate)
+	messageChannel := make(chan *discordgo.MessageCreate)
 
 	// Create the bot instance
 	myBot, err := bot.NewBot(discord_token, messageChannel)

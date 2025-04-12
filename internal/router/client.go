@@ -8,7 +8,7 @@ import (
 
 const (
 	OpenRouterBaseURL = "https://openrouter.ai/api/v1"
-	OpenRouterModel   = "deepseek/deepseek-r1:free"
+	OpenRouterModel   = "openrouter/optimus-alpha"
 	RefererURL        = "http://localhost"
 	AppTitle          = "Go OpenRouter CLI"
 )

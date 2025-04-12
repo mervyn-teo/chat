@@ -16,11 +16,11 @@ type Bot struct {
 	Session        *discordgo.Session
 	messageQueue   []*discordgo.MessageCreate // Keep queue internal if needed
 	mu             sync.Mutex
-	messageChannel chan discordgo.MessageCreate
+	messageChannel chan *discordgo.MessageCreate
 }
 
 // NewBot creates a new Bot instance but doesn't connect yet
-func NewBot(token string, msgChan chan discordgo.MessageCreate) (*Bot, error) {
+func NewBot(token string, msgChan chan *discordgo.MessageCreate) (*Bot, error) {
 	b := &Bot{
 		Token:          token,
 		messageChannel: msgChan, // Or initialize channel here
@@ -80,7 +80,7 @@ func (b *Bot) relayMessagesToRouter() {
 
 		if message != nil {
 			// Decide what to send: just content, or more structured data?
-			b.messageChannel <- *message // Send content
+			b.messageChannel <- message // Send content
 		} else {
 			// Maybe add a small sleep if queue is empty? time.Sleep(100 * time.Millisecond)
 			// Or use a condition variable for more efficiency
@@ -121,12 +121,18 @@ func (b *Bot) addMessage(message *discordgo.MessageCreate) {
 
 // RespondToMessage sends a message using the bot's session
 // This method is now part of the Bot struct
-func (b *Bot) RespondToMessage(channelId string, response string) {
+func (b *Bot) RespondToMessage(channelId string, response string, ref *discordgo.MessageReference) {
 	if b.Session == nil {
 		log.Println("Error: Bot session not initialized in RespondToMessage")
 		return
 	}
-	_, err := b.Session.ChannelMessageSend(channelId, response)
+
+	sendMessage := &discordgo.MessageSend{
+		Content:   response,
+		Reference: ref,
+	}
+
+	_, err := b.Session.ChannelMessageSendComplex(channelId, sendMessage)
 	if err != nil {
 		log.Printf("Error sending message via RespondToMessage: %v", err)
 	}

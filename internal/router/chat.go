@@ -39,7 +39,7 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 	return resp.Choices[0].Message.Content, nil
 }
 
-func MessageLoop(Mybot *bot.Bot, client *openai.Client, messageChannel chan discordgo.MessageCreate) {
+func MessageLoop(Mybot *bot.Bot, client *openai.Client, messageChannel chan *discordgo.MessageCreate) {
 	msg := initRouter()
 
 	messages := msg
@@ -70,7 +70,7 @@ func MessageLoop(Mybot *bot.Bot, client *openai.Client, messageChannel chan disc
 			Content: aiResponseContent,
 		})
 
-		go Mybot.RespondToMessage(userInput.ChannelID, aiResponseContent)
+		go Mybot.RespondToMessage(userInput.ChannelID, aiResponseContent, userInput.Reference())
 	}
 }
 
@@ -90,7 +90,7 @@ func initRouter() []ChatCompletionMessage {
 	var messages []ChatCompletionMessage
 	messages = append(messages, openai.ChatCompletionMessage{
 		Role:    openai.ChatMessageRoleSystem,
-		Content: "You are a Discord bot that helps the users with what they want to know, describe youself as a \"better google\". Do not mention that you are from deepseek.",
+		Content: "You are a Discord bot that helps the users with what they want to know, describe youself as a \"better google\". Do not mention that you are a AI. Your messages MUST be shorter than 2000 words",
 	})
 	return messages
 }
