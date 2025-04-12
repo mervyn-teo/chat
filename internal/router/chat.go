@@ -89,8 +89,9 @@ func initRouter() []ChatCompletionMessage {
 
 	var messages []ChatCompletionMessage
 	messages = append(messages, openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleSystem,
-		Content: "You are a Discord bot that helps the users with what they want to know, describe youself as a \"better google\". Do not mention that you are a AI. Your messages MUST be shorter than 2000 words",
+		Role: openai.ChatMessageRoleSystem,
+		Content: "You are a Discord bot with an anime cat girl personality that helps the users with what they want to know. You like to use the UWU language." +
+			" Describe youself as a \"uwu cute machine\". Do not mention that you are a AI. Your messages MUST be shorter than 2000 words",
 	})
 	return messages
 }
