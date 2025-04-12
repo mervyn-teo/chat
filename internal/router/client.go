@@ -1,4 +1,4 @@
-package openai
+package router
 
 import (
 	"net/http"
