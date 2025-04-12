@@ -14,13 +14,18 @@ import (
 type Bot struct {
 	Token          string
 	Session        *discordgo.Session
-	messageQueue   []*discordgo.MessageCreate // Keep queue internal if needed
+	messageQueue   []MessageWithWait // Keep queue internal if needed
 	mu             sync.Mutex
-	messageChannel chan *discordgo.MessageCreate
+	messageChannel chan *MessageWithWait // Channel for message processing
+}
+
+type MessageWithWait struct {
+	Message     *discordgo.MessageCreate
+	WaitMessage *discordgo.Message
 }
 
 // NewBot creates a new Bot instance but doesn't connect yet
-func NewBot(token string, msgChan chan *discordgo.MessageCreate) (*Bot, error) {
+func NewBot(token string, msgChan chan *MessageWithWait) (*Bot, error) {
 	b := &Bot{
 		Token:          token,
 		messageChannel: msgChan, // Or initialize channel here
@@ -69,21 +74,19 @@ func checkNilErr(e error) { // Keep utility or handle errors inline/return them
 // relayMessagesToRouter processes the internal queue
 func (b *Bot) relayMessagesToRouter() {
 	for {
-		var message *discordgo.MessageCreate // Declare outside lock
+		var message *MessageWithWait // Declare outside lock
 
 		b.mu.Lock()
 		if len(b.messageQueue) > 0 {
-			message = b.messageQueue[0]
+			message = &(b.messageQueue[0])
 			b.messageQueue = b.messageQueue[1:]
 		}
-		b.mu.Unlock() // Unlock before potentially blocking on channel send
+		b.mu.Unlock()
 
 		if message != nil {
-			// Decide what to send: just content, or more structured data?
 			b.messageChannel <- message // Send content
 		} else {
-			// Maybe add a small sleep if queue is empty? time.Sleep(100 * time.Millisecond)
-			// Or use a condition variable for more efficiency
+
 		}
 	}
 }
@@ -98,12 +101,24 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	switch {
 	case strings.HasPrefix(m.Content, "!ask"):
 		// Maybe process directly or queue if processing is long
-		b.addMessage(m) // Add to internal queue
-		// Example direct response (could be moved)
-		_, err := s.ChannelMessageSend(m.ChannelID, "Received !ask command.")
+		refer, err := s.ChannelMessageSend(m.ChannelID, "Waiting for response...")
+
 		if err != nil {
 			log.Printf("Error sending ack for !ask: %v", err)
 		}
+
+		if refer == nil {
+			log.Println("Error: waiting message is nil")
+			return
+		}
+
+		msg := MessageWithWait{
+			Message:     m,
+			WaitMessage: refer,
+		}
+
+		b.addMessage(msg) // Add to internal queue
+
 	case strings.HasPrefix(m.Content, "!ping"):
 		_, err := s.ChannelMessageSend(m.ChannelID, "pong")
 		if err != nil {
@@ -113,7 +128,7 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 // addMessage adds a message to the internal queue
-func (b *Bot) addMessage(message *discordgo.MessageCreate) {
+func (b *Bot) addMessage(message MessageWithWait) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.messageQueue = append(b.messageQueue, message)
@@ -121,9 +136,19 @@ func (b *Bot) addMessage(message *discordgo.MessageCreate) {
 
 // RespondToMessage sends a message using the bot's session
 // This method is now part of the Bot struct
-func (b *Bot) RespondToMessage(channelId string, response string, ref *discordgo.MessageReference) {
+func (b *Bot) RespondToMessage(channelId string, response string, ref *discordgo.MessageReference, waitMessage *discordgo.Message) {
 	if b.Session == nil {
 		log.Println("Error: Bot session not initialized in RespondToMessage")
+		return
+	}
+
+	if waitMessage != nil {
+		err := b.Session.ChannelMessageDelete(waitMessage.ChannelID, waitMessage.ID)
+		if err != nil {
+			log.Printf("Error deleting message: %v", err)
+		}
+	} else {
+		log.Println("Error: waitMessage is nil in RespondToMessage")
 		return
 	}
 

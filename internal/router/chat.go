@@ -3,7 +3,6 @@ package router
 import (
 	"context"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
 	"log"
 	"strings"
 	"untitled/internal/bot"
@@ -39,13 +38,13 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 	return resp.Choices[0].Message.Content, nil
 }
 
-func MessageLoop(Mybot *bot.Bot, client *openai.Client, messageChannel chan *discordgo.MessageCreate) {
+func MessageLoop(Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait) {
 	msg := initRouter()
 
 	messages := msg
 	for {
 		userInput := <-messageChannel
-		parsed, isSkip := parseUserInput(userInput.Content)
+		parsed, isSkip := parseUserInput(userInput.Message.Content)
 
 		if isSkip {
 			continue
@@ -70,7 +69,7 @@ func MessageLoop(Mybot *bot.Bot, client *openai.Client, messageChannel chan *dis
 			Content: aiResponseContent,
 		})
 
-		go Mybot.RespondToMessage(userInput.ChannelID, aiResponseContent, userInput.Reference())
+		go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 	}
 }
 

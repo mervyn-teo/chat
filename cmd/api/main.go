@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/bwmarrin/discordgo"
 	"github.com/sashabaranov/go-openai"
 	"log"
 	"untitled/internal/bot"
@@ -31,7 +30,7 @@ func init() {
 
 func main() {
 	// Shared channel for communication between bot and router
-	messageChannel := make(chan *discordgo.MessageCreate)
+	messageChannel := make(chan *bot.MessageWithWait)
 
 	// Create the bot instance
 	myBot, err := bot.NewBot(discord_token, messageChannel)
