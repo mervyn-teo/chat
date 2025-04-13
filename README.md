@@ -16,7 +16,7 @@ $ cd chat
 
 **3. build with go**
 ```bash
-$ go build -o chat api
+$ go build -o chat ./cmd/api
 ```
 
 **4. Set up environment variables**
