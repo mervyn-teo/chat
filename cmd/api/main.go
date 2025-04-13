@@ -14,10 +14,12 @@ import (
 	"untitled/internal/storage"
 )
 
-var apiKey string
-var client *openai.Client
-var discord_token string
-var settings storage.Settings
+var (
+	apiKey        string
+	client        *openai.Client
+	discord_token string
+	settings      storage.Settings
+)
 
 func init() {
 	var err error
@@ -30,7 +32,7 @@ func init() {
 	discord_token = settings.DiscordToken
 
 	// Create the OpenAI client
-	client, err = router.CreateClient(apiKey)
+	client, err = router.CreateClient(settings.Model, apiKey)
 	if err != nil {
 		log.Fatalf("Failed to create OpenAI client: %v", err)
 	}

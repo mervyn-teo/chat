@@ -11,6 +11,7 @@ type Settings struct {
 	ApiKey       string `json:"api_key"`
 	DiscordToken string `json:"discord_bot_token"`
 	Instructions string `json:"instructions"`
+	Model        string `json:"model"`
 }
 
 func LoadSettings(filePath string) (Settings, error) {

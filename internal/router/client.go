@@ -1,6 +1,7 @@
 package router
 
 import (
+	"log"
 	"net/http"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -8,10 +9,11 @@ import (
 
 const (
 	OpenRouterBaseURL = "https://openrouter.ai/api/v1"
-	OpenRouterModel   = "openrouter/optimus-alpha"
 	RefererURL        = "http://localhost"
 	AppTitle          = "Go OpenRouter CLI"
 )
+
+var OpenRouterModel = "gpt-3.5-turbo" // default model
 
 type headerTransport struct {
 	Transport http.RoundTripper
@@ -29,10 +31,12 @@ func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return base.RoundTrip(req)
 }
 
-func CreateClient(apiKey string) (*openai.Client, error) {
+func CreateClient(model string, apiKey string) (*openai.Client, error) {
+	OpenRouterModel = model
 	config := openai.DefaultConfig(apiKey)
 	config.BaseURL = OpenRouterBaseURL
 
+	log.Println("You are using " + OpenRouterModel + " model, you can change it in settings.json")
 	customTransport := &headerTransport{
 		Transport: http.DefaultTransport,
 	}
