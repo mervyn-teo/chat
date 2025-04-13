@@ -60,9 +60,9 @@ jobs:
           port: 22 # Default SSH port, change if needed
           source: "mychatbot" # The file built in the previous step
           target: ${{ secrets.DEPLOY_TARGET_PATH }} # Destination path on the server
-          script: 
+          script: |
             pkill -f ${{ secrets.DEPLOY_TARGET_PATH }} || true
             cd $(dirname ${{ secrets.DEPLOY_TARGET_PATH }})
-            nohup ./${{ secrets.DEPLOY_TARGET_PATH##*/ }} > chatbot.log 2>&1 &
+            nohup ./mychatbot > chatbot.log 2>&1 &
             echo "Deployment script executed."
 
