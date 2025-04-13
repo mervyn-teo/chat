@@ -1,3 +1,5 @@
+![workflow status](https://github.com/mervyn-teo/chat/actions/workflows/go.yml/badge.svg)
+
 # About
 Discord chatbot with AI integration using OpenRouter API.
 
