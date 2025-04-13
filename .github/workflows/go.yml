@@ -1,27 +1,68 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+# .github/workflows/go-ci-cd.yml
 
-name: Go
+name: Go CI/CD
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master" ] # Trigger CD only on pushes to the main branch
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master" ] # Run CI on pull requests
 
 jobs:
-
-  build:
+  build-and-test: # This job runs for both PRs and pushes
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.24'
-    - name: Build
-      run: go build -v ./...
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
 
-    - name: Test
-      run: go test -v ./...
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build # Build just to ensure it compiles
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v ./...
+
+  deploy:
+    # Only run this job if the push was to the main branch (not on PRs)
+    # and the build-and-test job succeeded
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Build production binary
+        run: go build -v -o mychatbot .
+
+      # Use a popular SSH action to copy the file and run commands
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          port: 22 # Default SSH port, change if needed
+          source: "mychatbot" # The file built in the previous step
+          target: ${{ secrets.DEPLOY_TARGET_PATH }} # Destination path on the server
+          script: 
+            pkill -f ${{ secrets.DEPLOY_TARGET_PATH }} || true
+            cd $(dirname ${{ secrets.DEPLOY_TARGET_PATH }})
+            nohup ./${{ secrets.DEPLOY_TARGET_PATH##*/ }} > chatbot.log 2>&1 &
+            echo "Deployment script executed."
+
