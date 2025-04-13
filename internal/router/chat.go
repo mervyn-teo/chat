@@ -84,8 +84,6 @@ func parseUserInput(userInput string) (parsed string, skip bool) {
 }
 
 func initRouter(instructions string) []ChatCompletionMessage {
-	fmt.Printf("Chatting with %s via OpenRouter. Type 'quit' or press Ctrl+D to exit.\n", OpenRouterModel)
-
 	var messages []ChatCompletionMessage
 	messages = append(messages, openai.ChatCompletionMessage{
 		Role:    openai.ChatMessageRoleSystem,
