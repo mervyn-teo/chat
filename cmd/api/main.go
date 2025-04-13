@@ -11,10 +11,12 @@ import (
 var apiKey string
 var client *openai.Client
 var discord_token string
+var settings storage.Settings
 
 func init() {
+	var err error
 	// Load the API key from the settings file
-	settings, err := storage.LoadSettings("settings.json")
+	settings, err = storage.LoadSettings("settings.json")
 	if err != nil {
 		log.Fatalf("Initialization failed: %v", err)
 	}
@@ -39,7 +41,7 @@ func main() {
 	}
 
 	// Start the router loop in a goroutine
-	go router.MessageLoop(myBot, client, messageChannel)
+	go router.MessageLoop(myBot, client, messageChannel, settings.Instructions)
 
 	// Start the bot in its own goroutine
 	// Start() will connect, add handlers, and block until shutdown

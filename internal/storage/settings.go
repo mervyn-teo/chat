@@ -10,6 +10,7 @@ import (
 type Settings struct {
 	ApiKey       string `json:"api_key"`
 	DiscordToken string `json:"discord_bot_token"`
+	Instructions string `json:"instructions"`
 }
 
 func LoadSettings(filePath string) (Settings, error) {

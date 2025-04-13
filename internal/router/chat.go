@@ -38,8 +38,8 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 	return resp.Choices[0].Message.Content, nil
 }
 
-func MessageLoop(Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait) {
-	msg := initRouter()
+func MessageLoop(Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string) {
+	msg := initRouter(instructions)
 
 	messages := msg
 	for {
@@ -83,14 +83,13 @@ func parseUserInput(userInput string) (parsed string, skip bool) {
 	return userInput, false
 }
 
-func initRouter() []ChatCompletionMessage {
+func initRouter(instructions string) []ChatCompletionMessage {
 	fmt.Printf("Chatting with %s via OpenRouter. Type 'quit' or press Ctrl+D to exit.\n", OpenRouterModel)
 
 	var messages []ChatCompletionMessage
 	messages = append(messages, openai.ChatCompletionMessage{
-		Role: openai.ChatMessageRoleSystem,
-		Content: "You are a Discord bot with an anime cat girl personality that helps the users with what they want to know. You like to use the UWU language." +
-			" Describe youself as a \"uwu cute machine\". Do not mention that you are a AI. Your messages MUST be shorter than 2000 words",
+		Role:    openai.ChatMessageRoleSystem,
+		Content: instructions,
 	})
 	return messages
 }
