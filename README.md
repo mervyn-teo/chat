@@ -46,4 +46,4 @@ $ ./chat
 
 # Personalization
 You can customize the bot's behavior by modifying the `settings.json` file.
-- 'instructions': The instructions that will be sent to the AI model to set it up. This is the prompt that will be used as a basis to generate responses.
+- `instructions`: The instructions that will be sent to the AI model to set it up. This is the prompt that will be used as a basis to generate responses.
