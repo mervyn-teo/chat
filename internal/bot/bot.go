@@ -162,3 +162,18 @@ func (b *Bot) RespondToMessage(channelId string, response string, ref *discordgo
 		log.Printf("Error sending message via RespondToMessage: %v", err)
 	}
 }
+
+func (b *Bot) Stop() error {
+	// Close the session and clean up resources
+	if b.Session != nil {
+		err := b.Session.Close()
+		if err != nil {
+			log.Printf("Error closing Discord session: %v", err)
+			return err
+		}
+	}
+
+	close(b.messageChannel) // Close the message channel if necessary
+	log.Println("Bot stopped.")
+	return nil
+}

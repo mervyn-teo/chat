@@ -38,38 +38,45 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 	return resp.Choices[0].Message.Content, nil
 }
 
-func MessageLoop(Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string) {
+func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string) {
 	msg := initRouter(instructions)
 
 	messages := msg
 	for {
-		userInput := <-messageChannel
-		parsed, isSkip := parseUserInput(userInput.Message.Content)
+		select {
+		case <-ctx.Done(): // Check if context has been cancelled
+			log.Println("Router loop: shutdown signal received.")
+			// Perform any necessary cleanup within the router
+			return // Exit the loop
 
-		if isSkip {
-			continue
-		}
+		case userInput := <-messageChannel:
+			parsed, isSkip := parseUserInput(userInput.Message.Content)
 
-		messages = append(messages, ChatCompletionMessage{
-			Role:    ChatMessageRoleUser,
-			Content: parsed,
-		})
-
-		aiResponseContent, err := SendMessage(client, messages)
-		if err != nil {
-			log.Printf("Error getting response from OpenRouter: %v", err)
-			if len(messages) > 0 {
-				messages = messages[:len(messages)-1]
+			if isSkip {
+				continue
 			}
-			continue
+
+			messages = append(messages, ChatCompletionMessage{
+				Role:    ChatMessageRoleUser,
+				Content: parsed,
+			})
+
+			aiResponseContent, err := SendMessage(client, messages)
+			if err != nil {
+				log.Printf("Error getting response from OpenRouter: %v", err)
+				if len(messages) > 0 {
+					messages = messages[:len(messages)-1]
+				}
+				continue
+			}
+
+			messages = append(messages, ChatCompletionMessage{
+				Role:    ChatMessageRoleAssistant,
+				Content: aiResponseContent,
+			})
+
+			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 		}
-
-		messages = append(messages, ChatCompletionMessage{
-			Role:    ChatMessageRoleAssistant,
-			Content: aiResponseContent,
-		})
-
-		go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 	}
 }
 
