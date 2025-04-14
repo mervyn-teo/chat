@@ -39,9 +39,8 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 }
 
 func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string) {
-	msg := initRouter(instructions)
+	messages := initRouter(instructions)
 
-	messages := msg
 	for {
 		select {
 		case <-ctx.Done(): // Check if context has been cancelled
@@ -50,27 +49,36 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			return // Exit the loop
 
 		case userInput := <-messageChannel:
+			userID := userInput.Message.Author.ID
 			parsed, isSkip := parseUserInput(userInput.Message.Content)
 
 			if isSkip {
 				continue
 			}
 
-			messages = append(messages, ChatCompletionMessage{
+			currentMessages, userExists := messages[userID]
+			if !userExists {
+				// First message from this user, initialize with system prompt
+				log.Printf("Initializing conversation for user: %s", userID)
+				currentMessages = setInitialMessages(instructions)
+			}
+
+			messages[userID] = append(currentMessages, ChatCompletionMessage{
 				Role:    ChatMessageRoleUser,
 				Content: parsed,
 			})
 
-			aiResponseContent, err := SendMessage(client, messages)
+			aiResponseContent, err := SendMessage(client, messages[userInput.Message.Author.ID])
 			if err != nil {
 				log.Printf("Error getting response from OpenRouter: %v", err)
 				if len(messages) > 0 {
-					messages = messages[:len(messages)-1]
+					// Remove the last message if there's an error
+					messages[userID] = currentMessages[:len(messages)-1]
 				}
 				continue
 			}
 
-			messages = append(messages, ChatCompletionMessage{
+			messages[userID] = append(currentMessages, ChatCompletionMessage{
 				Role:    ChatMessageRoleAssistant,
 				Content: aiResponseContent,
 			})
@@ -90,11 +98,16 @@ func parseUserInput(userInput string) (parsed string, skip bool) {
 	return userInput, false
 }
 
-func initRouter(instructions string) []ChatCompletionMessage {
-	var messages []ChatCompletionMessage
-	messages = append(messages, openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleSystem,
-		Content: instructions,
-	})
+func initRouter(instructions string) map[string][]ChatCompletionMessage {
+	messages := make(map[string][]ChatCompletionMessage)
 	return messages
+}
+
+func setInitialMessages(instructions string) []ChatCompletionMessage {
+	return []ChatCompletionMessage{
+		{
+			Role:    ChatMessageRoleSystem,
+			Content: instructions,
+		},
+	}
 }
