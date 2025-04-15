@@ -4,12 +4,12 @@ name: Go CI/CD
 
 on:
   push:
-    branches: [ "master" ] # Trigger CD only on pushes to the main branch
+    branches: [ "master" ]
   pull_request:
-    branches: [ "master" ] # Run CI on pull requests
+    branches: [ "master" ]
 
 jobs:
-  build-and-test: # This job runs for both PRs and pushes (CI part)
+  build-and-test: # This job runs for both PRs and pushes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -18,27 +18,24 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24' # Or your project's Go version
+          go-version: '1.24'
           cache: true
 
       - name: Download dependencies
         run: go mod download
 
-      - name: Build # Build just to ensure it compiles in CI
-        run: go build -v ./...
+      - name: Build (Check compilation of main package)
+        run: go build -v ./cmd/api
 
       - name: Test
         run: go test -v ./...
 
   deploy:
-    # Only run this job if the push was to the main branch (not on PRs)
-    # and the build-and-test job succeeded
     needs: build-and-test
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
-      # Still need checkout and Go setup here to build the binary
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -49,51 +46,48 @@ jobs:
           cache: true
 
       - name: Build production binary
-        run: go build -v -o mychatbot . # Build the binary in the runner
+        # Build the specific main package and output to 'mychatbot' in the root
+        run: go build -v -o mychatbot ./cmd/api
 
-      # Use SSH action to copy the file AND run git commands
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          port: 22 # Default SSH port, change if needed
-          source: "mychatbot" # The binary built in the previous step
-          # Target path should be the directory where the binary will live
-          # AND where the git repo is checked out.
-          target: ${{ secrets.DEPLOY_TARGET_PATH }}
+          port: 22
+          source: "mychatbot"
+          target: ${{ secrets.DEPLOY_TARGET_PATH }} # Destination path on the server
           script: |
             # Define the target directory and binary path on the server
-            TARGET_DIR=${{ secrets.DEPLOY_TARGET_PATH }}
-            BINARY_NAME="mychatbot"
+            # Assuming DEPLOY_TARGET_PATH is the directory where the binary should live
+            TARGET_DIR=$(dirname ${{ secrets.DEPLOY_TARGET_PATH }})
+            BINARY_NAME=$(basename ${{ secrets.DEPLOY_TARGET_PATH }}) # Get the intended binary name from the target path
             BINARY_PATH="$TARGET_DIR/$BINARY_NAME"
 
-            echo "Navigating to project directory: $TARGET_DIR"
-            cd $TARGET_DIR || { echo "Failed to cd into $TARGET_DIR"; exit 1; }
-
-            echo "Checking out master branch..."
-            git checkout master || { echo "Git checkout master failed"; exit 1; }
-
-            echo "Pulling latest changes from origin master..."
-            # Reset potentially conflicting local changes and pull
-            git fetch origin
-            git reset --hard origin/master
-            git pull origin master || { echo "Git pull failed"; exit 1; }
-
-            # Note: The binary 'mychatbot' has already been copied to $TARGET_DIR
-            # by the 'source' and 'target' parameters of this action.
+            echo "Target directory: $TARGET_DIR"
+            echo "Binary name: $BINARY_NAME"
+            echo "Full binary path: $BINARY_PATH"
 
             echo "Stopping existing application (if running)..."
-            # Use pkill with the full path to the binary for specificity
-            pkill -f "$BINARY_PATH" || echo "No existing process found or pkill failed (continuing)."
-            sleep 2
+            # Use pkill with the full path for specificity
+            # The || true prevents the script from failing if the process isn't found
+            pkill -f "$BINARY_PATH" || true
+            sleep 2 # Give time for the process to stop
+
+            echo "Ensuring target directory exists: $TARGET_DIR"
+            mkdir -p $TARGET_DIR # Ensure the directory exists
+
+            # Note: The 'source' and 'target' parameters already copied the new binary
+            # from the runner's 'mychatbot' to the server's '$BINARY_PATH'
 
             echo "Ensuring new binary is executable..."
             chmod +x "$BINARY_PATH"
 
-            echo "Starting new application..."
-            # Start the new binary (already copied) in the background
-            nohup "$BINARY_PATH" > chatbot.log 2>&1 &
+            echo "Starting new application in directory $TARGET_DIR..."
+            cd $TARGET_DIR || { echo "Failed to cd into $TARGET_DIR"; exit 1; }
+            # Start the binary using its name within its directory
+            nohup "./$BINARY_NAME" > chatbot.log 2>&1 &
 
-            echo "Deployment script executed successfully."
+            echo "Deployment script executed."
+
