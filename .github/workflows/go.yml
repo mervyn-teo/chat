@@ -72,6 +72,7 @@ jobs:
           source: "mychatbot" # The file built in the previous step
           target: ${{ secrets.DEPLOY_TARGET_PATH }} # Destination path on the server
           script: |
+            kill $(pgrep -fi ./mychatbot) || true
             cd ${{ secrets.DEPLOY_TARGET_PATH }}
             nohup ./mychatbot > chatbot.log 2>&1 &
             echo "Deployment script executed."
