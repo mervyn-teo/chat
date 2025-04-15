@@ -50,6 +50,17 @@ jobs:
       - name: Build production binary
         run: go build -v -o mychatbot ./cmd/api
 
+      - name: Copy binary via SCP
+        uses: appleboy/scp-action@v0.1.7 # Use the dedicated SCP action
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          port: 22 # Default SSH port, change if needed
+          source: "mychatbot" # The binary built locally in the runner
+          target: ${{ secrets.DEPLOY_TARGET_PATH }} # The FULL destination path on the server
+          strip_components: 0 # Keep the filename
+
       # Use a popular SSH action to copy the file and run commands
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
