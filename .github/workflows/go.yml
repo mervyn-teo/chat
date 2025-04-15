@@ -1,12 +1,12 @@
-# .github/workflows/go-ci-cd.yml
+# .github/workflows/go.yml
 
 name: Go CI/CD
 
 on:
   push:
-    branches: [ "master" ] # Or "main" if that's your branch
+    branches: [ "master" ] # Trigger CD only on pushes to the main branch
   pull_request:
-    branches: [ "master" ] # Or "main"
+    branches: [ "master" ] # Run CI on pull requests
 
 jobs:
   build-and-test: # This job runs for both PRs and pushes
@@ -18,22 +18,21 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24' # Use your project's Go version
+          go-version: '1.24'
           cache: true
 
       - name: Download dependencies
-        # Runs from the root, finds go.mod
         run: go mod download
 
-      - name: Build (Check compilation of main package)
-        # Explicitly build the main package to ensure it compiles
-        run: go build -v ./cmd/api
+      - name: Build # Build just to ensure it compiles
+        run: go build -v ./...
 
       - name: Test
-        # Runs tests in all subdirectories from the root
         run: go test -v ./...
-        
+
   deploy:
+    # Only run this job if the push was to the main branch (not on PRs)
+    # and the build-and-test job succeeded
     needs: build-and-test
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -49,66 +48,22 @@ jobs:
           cache: true
 
       - name: Build production binary
-        # Build the specific main package and output to 'chat' in the root
-        run: go build -v -o chat ./cmd/api
+        run: go build -v -o mychatbot .
 
-      # Step 1: Copy the built binary to the server
-      - name: Copy binary via SCP
-        uses: appleboy/scp-action@v0.1.7 # Use the dedicated SCP action
+      # Use a popular SSH action to copy the file and run commands
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           port: 22 # Default SSH port, change if needed
-          source: "chat" # The binary built locally in the runner
-          target: ${{ secrets.DEPLOY_TARGET_PATH }} # The FULL destination path on the server
-          strip_components: 0 # Keep the filename
-
-      # Step 2: Execute commands on the server (stop, chmod, start)
-      - name: Deploy via SSH (Execute Commands)
-        uses: appleboy/ssh-action@v1.0.3 # Keep the SSH action for commands
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_KEY }}
-          port: 22
+          source: "mychatbot" # The file built in the previous step
+          target: ${{ secrets.DEPLOY_TARGET_PATH }} # Destination path on the server
           script: |
-            # Use the DEPLOY_TARGET_PATH directly as the full binary path
-            BINARY_PATH="${{ secrets.DEPLOY_TARGET_PATH }}"
-            TARGET_DIR=$(dirname "$BINARY_PATH")
-            BINARY_NAME=$(basename "$BINARY_PATH")
-
-            echo "--- Running Deployment Script ---"
-
-            echo "i am $(whoami)"
-
-            echo "Checking file existence and permissions before chmod:"
-            ls -l "$BINARY_PATH" || echo "File does not exist yet (expected after SCP)."
-
-            echo "Stopping existing application (if running)..."
-            # Use pkill with the full path for specificity
-            pkill -f "$BINARY_PATH" || echo "pkill: No process found or failed (continuing)."
-            sleep 2 # Give time for the process to stop
-
-            echo "Ensuring target directory exists"
-            # Use -p to avoid errors if it exists, handle potential permission issues
-            mkdir -p "$TARGET_DIR" || { echo "Failed to ensure directory exists"; exit 1; }
-
-            echo "Attempting to set execute permissions on BINARY_PATH..."
-            chmod +x "$BINARY_PATH" || { echo "Failed to chmod +x BINARY_PATH"; exit 1; }
-
-            echo "Checking file permissions AFTER chmod:"
-            ls -l "$BINARY_PATH"
-
-            echo "Starting new application in directory TARGET_DIR..."
-            cd "$TARGET_DIR" || { echo "Failed to cd into TARGET_DIR"; exit 1; }
-
-            echo "Attempting to run ./BINARY_NAME with nohup..."
-            nohup "./$BINARY_NAME" > chatbot.log 2>&1 &
-
-            # Check if the process started (optional, might need adjustment)
-            sleep 2
-            pgrep -f "$BINARY_PATH" > /dev/null || echo "WARNING: Process BINARY_NAME may not have started successfully."
-
-            echo "Deployment script finished."
-
+            pkill -f ${{ secrets.DEPLOY_TARGET_PATH }} || true
+            cd $(dirname ${{ secrets.DEPLOY_TARGET_PATH }})
+            nohup ./mychatbot > chatbot.log 2>&1 &
+            git pull || echo "There are some issues syncing the code"
+            echo "Deployment script executed."
+            
