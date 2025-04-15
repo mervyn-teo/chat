@@ -9,7 +9,7 @@ on:
     branches: [ "master" ] # Run CI on pull requests
 
 jobs:
-  build-and-test: # This job runs for both PRs and pushes
+  build-and-test: # This job runs for both PRs and pushes (CI part)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -18,13 +18,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.24' # Or your project's Go version
           cache: true
 
       - name: Download dependencies
         run: go mod download
 
-      - name: Build # Build just to ensure it compiles
+      - name: Build # Build just to ensure it compiles in CI
         run: go build -v ./...
 
       - name: Test
@@ -38,6 +38,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Still need checkout and Go setup here to build the binary
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -48,9 +49,9 @@ jobs:
           cache: true
 
       - name: Build production binary
-        run: go build -v -o mychatbot .
+        run: go build -v -o mychatbot . # Build the binary in the runner
 
-      # Use a popular SSH action to copy the file and run commands
+      # Use SSH action to copy the file AND run git commands
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -58,11 +59,41 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           port: 22 # Default SSH port, change if needed
-          source: "mychatbot" # The file built in the previous step
-          target: ${{ secrets.DEPLOY_TARGET_PATH }} # Destination path on the server
+          source: "mychatbot" # The binary built in the previous step
+          # Target path should be the directory where the binary will live
+          # AND where the git repo is checked out.
+          target: ${{ secrets.DEPLOY_TARGET_PATH }}
           script: |
-            pkill -f ${{ secrets.DEPLOY_TARGET_PATH }} || true
-            cd $(dirname ${{ secrets.DEPLOY_TARGET_PATH }})
-            nohup ./mychatbot > chatbot.log 2>&1 &
-            echo "Deployment script executed."
+            # Define the target directory and binary path on the server
+            TARGET_DIR=${{ secrets.DEPLOY_TARGET_PATH }}
+            BINARY_NAME="mychatbot"
+            BINARY_PATH="$TARGET_DIR/$BINARY_NAME"
 
+            echo "Navigating to project directory: $TARGET_DIR"
+            cd $TARGET_DIR || { echo "Failed to cd into $TARGET_DIR"; exit 1; }
+
+            echo "Checking out master branch..."
+            git checkout master || { echo "Git checkout master failed"; exit 1; }
+
+            echo "Pulling latest changes from origin master..."
+            # Reset potentially conflicting local changes and pull
+            git fetch origin
+            git reset --hard origin/master
+            git pull origin master || { echo "Git pull failed"; exit 1; }
+
+            # Note: The binary 'mychatbot' has already been copied to $TARGET_DIR
+            # by the 'source' and 'target' parameters of this action.
+
+            echo "Stopping existing application (if running)..."
+            # Use pkill with the full path to the binary for specificity
+            pkill -f "$BINARY_PATH" || echo "No existing process found or pkill failed (continuing)."
+            sleep 2
+
+            echo "Ensuring new binary is executable..."
+            chmod +x "$BINARY_PATH"
+
+            echo "Starting new application..."
+            # Start the new binary (already copied) in the background
+            nohup "$BINARY_PATH" > chatbot.log 2>&1 &
+
+            echo "Deployment script executed successfully."

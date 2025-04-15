@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Bot holds the state for a Discord bot instance
@@ -41,7 +42,6 @@ func NewBot(token string, msgChan chan *MessageWithWait) (*Bot, error) {
 
 // Start connects the bot and begins handling events
 func (b *Bot) Start() error {
-	// Add handlers using methods of the Bot struct
 	b.Session.AddHandler(b.newMessage)
 
 	// Open session
@@ -52,16 +52,15 @@ func (b *Bot) Start() error {
 
 	// Start any necessary goroutines
 	// Consider if relayMessagetToRouter is still the best approach
-	go b.relayMessagesToRouter() // Now a method
+	go b.relayMessagesToRouter()
 
 	fmt.Println("Bot running....")
-	// Keep bot running logic (no changes needed here)
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
 	fmt.Println("Bot shutting down...")
 
-	// Close the session explicitly when shutting down
 	return b.Session.Close()
 }
 
@@ -80,20 +79,19 @@ func (b *Bot) relayMessagesToRouter() {
 		if len(b.messageQueue) > 0 {
 			message = &(b.messageQueue[0])
 			b.messageQueue = b.messageQueue[1:]
-		}
-		b.mu.Unlock()
+			b.mu.Unlock()
 
-		if message != nil {
 			b.messageChannel <- message // Send content
 		} else {
-
+			b.mu.Unlock()
+			// Add a small sleep to prevent CPU spinning when queue is empty
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
 
 // newMessage is the event handler, now a method on Bot
 func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Use b.Session or the passed 's' - they are the same
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
@@ -101,7 +99,7 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	switch {
 	case strings.HasPrefix(m.Content, "!ask"):
 		// Maybe process directly or queue if processing is long
-		refer, err := s.ChannelMessageSend(m.ChannelID, "Waiting for response...")
+		refer, err := s.ChannelMessageSendReply(m.ChannelID, "Waiting for response...", m.Reference())
 
 		if err != nil {
 			log.Printf("Error sending ack for !ask: %v", err)
