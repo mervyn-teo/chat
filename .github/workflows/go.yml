@@ -80,6 +80,8 @@ jobs:
 
             echo "--- Running Deployment Script ---"
 
+            echo "i am $(whoami)"
+
             echo "Checking file existence and permissions before chmod:"
             ls -l "$BINARY_PATH" || echo "File does not exist yet (expected after SCP)."
 
