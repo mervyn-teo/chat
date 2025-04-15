@@ -1,4 +1,4 @@
-# .github/workflows/go.yml
+# .github/workflows/go-ci-cd.yml
 
 name: Go CI/CD
 
@@ -34,7 +34,7 @@ jobs:
     # Only run this job if the push was to the main branch (not on PRs)
     # and the build-and-test job succeeded
     needs: build-and-test
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -57,55 +57,11 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          port: 22
-          source: "mychatbot"
-          target: ${{ secrets.DEPLOY_TARGET_PATH }}
+          port: 22 # Default SSH port, change if needed
+          source: "mychatbot" # The file built in the previous step
+          target: ${{ secrets.DEPLOY_TARGET_PATH }} # Destination path on the server
           script: |
-            TARGET_BIN="${{ secrets.DEPLOY_TARGET_PATH }}"
-            TARGET_DIR=$(dirname "$TARGET_BIN")
-            PID_FILE="$TARGET_DIR/mychatbot.pid" # Assuming PID file in same dir
+            cd $(dirname ${{ secrets.DEPLOY_TARGET_PATH }})
+            nohup ./mychatbot > chatbot.log 2>&1 &
+            echo "Deployment script executed."
 
-            echo "Changing to target directory: $TARGET_DIR"
-            cd "$TARGET_DIR" || exit 1 # Exit if cd fails
-
-            if [ -f "$PID_FILE" ]; then
-              PID=$(cat "$PID_FILE")
-              echo "Found PID file ($PID_FILE) with PID $PID. Stopping process..."
-              if kill -0 "$PID" 2>/dev/null; then
-                kill "$PID"
-                sleep 2 # Give it time to shut down gracefully
-                if kill -0 "$PID" 2>/dev/null; then
-                  echo "Process $PID did not stop gracefully. Sending SIGKILL."
-                  kill -9 "$PID"
-                  sleep 1
-                else
-                  echo "Process $PID stopped gracefully."
-                fi
-              else
-                echo "Process $PID not found, removing stale PID file."
-              fi
-              rm -f "$PID_FILE"
-            else
-              echo "PID file not found. Attempting pkill as fallback..."
-              # Fallback: Use pkill but be careful
-              pkill -f "$TARGET_BIN" || echo "pkill found no process or failed."
-              sleep 1
-            fi
-
-            echo "Starting new application binary: $TARGET_BIN"
-            chmod +x "$TARGET_BIN" # Ensure it's executable
-            nohup "$TARGET_BIN" > chatbot.log 2>&1 &
-            echo $! > "$PID_FILE" # Save the new PID
-
-            # Check if the process started successfully (optional)
-            sleep 1
-            if ! kill -0 $(cat "$PID_FILE") 2>/dev/null; then
-              echo "ERROR: Process $(cat "$PID_FILE") did not start successfully or exited immediately. Check chatbot.log"
-              rm -f "$PID_FILE"
-              exit 1 # Fail the deployment step
-            fi
-
-            echo "Deployment script executed. New PID: $(cat "$PID_FILE")"
-
-
-            
