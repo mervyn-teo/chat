@@ -74,8 +74,8 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				if len(messages) > 0 {
 					// Remove the last message if there's an error
 					messages[userID] = currentMessages[:len(messages)-1]
+					aiResponseContent = "There was an error processing your request. Please try again."
 				}
-				continue
 			}
 
 			messages[userID] = append(currentMessages, ChatCompletionMessage{
