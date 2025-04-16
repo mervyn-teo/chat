@@ -97,13 +97,13 @@ func parseModelResponse(modelResponse string) string {
 	if strings.Contains(ret, "currDate()") {
 		currentTime := time.Now()
 		formattedDate := currentTime.Format("2006-01-02")
-		ret = strings.ReplaceAll(modelResponse, "currDate()", formattedDate)
+		ret = strings.ReplaceAll(ret, "currDate()", formattedDate)
 	}
 
 	if strings.Contains(ret, "currTime()") {
 		currentTime := time.Now()
 		formattedTime := currentTime.Format("15:04:05")
-		ret = strings.ReplaceAll(modelResponse, "currTime()", formattedTime)
+		ret = strings.ReplaceAll(ret, "currTime()", formattedTime)
 	}
 
 	return ret
