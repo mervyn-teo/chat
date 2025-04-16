@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 	"untitled/internal/bot"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -78,6 +79,8 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				}
 			}
 
+			aiResponseContent = parseModelResponse(aiResponseContent)
+
 			messages[userID] = append(currentMessages, ChatCompletionMessage{
 				Role:    ChatMessageRoleAssistant,
 				Content: aiResponseContent,
@@ -86,6 +89,23 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 		}
 	}
+}
+
+func parseModelResponse(modelResponse string) string {
+	ret := modelResponse
+	if strings.Contains(modelResponse, "currDate()") {
+		currentTime := time.Now()
+		formattedDate := currentTime.Format("2006-01-02")
+		ret = strings.ReplaceAll(modelResponse, "currDate()", formattedDate)
+	}
+
+	if strings.Contains(modelResponse, "currTime()") {
+		currentTime := time.Now()
+		formattedTime := currentTime.Format("15:04:05")
+		ret = strings.ReplaceAll(modelResponse, "currTime()", formattedTime)
+	}
+
+	return ret
 }
 
 func parseUserInput(userInput string) (parsed string, skip bool) {
