@@ -79,34 +79,39 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				}
 			}
 
-			aiResponseContent = parseModelResponse(aiResponseContent)
+			parsed, recorded := parseModelResponse(aiResponseContent)
 
-			messages[userID] = append(currentMessages, ChatCompletionMessage{
-				Role:    ChatMessageRoleAssistant,
-				Content: aiResponseContent,
-			})
+			if recorded {
+				messages[userID] = append(currentMessages, ChatCompletionMessage{
+					Role:    ChatMessageRoleAssistant,
+					Content: parsed,
+				})
+			}
 
 			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 		}
 	}
 }
 
-func parseModelResponse(modelResponse string) string {
+func parseModelResponse(modelResponse string) (string, bool) {
 	ret := modelResponse
+	var recorded bool = true
 
 	if strings.Contains(ret, "currDate()") {
 		currentTime := time.Now()
 		formattedDate := currentTime.Format("2006-01-02")
 		ret = strings.ReplaceAll(ret, "currDate()", formattedDate)
+		recorded = false
 	}
 
 	if strings.Contains(ret, "currTime()") {
 		currentTime := time.Now()
 		formattedTime := currentTime.Format("15:04:05")
 		ret = strings.ReplaceAll(ret, "currTime()", formattedTime)
+		recorded = false
 	}
 
-	return ret
+	return ret, recorded
 }
 
 func parseUserInput(userInput string) (parsed string, skip bool) {
