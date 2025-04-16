@@ -93,13 +93,14 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 func parseModelResponse(modelResponse string) string {
 	ret := modelResponse
-	if strings.Contains(modelResponse, "currDate()") {
+
+	if strings.Contains(ret, "currDate()") {
 		currentTime := time.Now()
 		formattedDate := currentTime.Format("2006-01-02")
 		ret = strings.ReplaceAll(modelResponse, "currDate()", formattedDate)
 	}
 
-	if strings.Contains(modelResponse, "currTime()") {
+	if strings.Contains(ret, "currTime()") {
 		currentTime := time.Now()
 		formattedTime := currentTime.Format("15:04:05")
 		ret = strings.ReplaceAll(modelResponse, "currTime()", formattedTime)
