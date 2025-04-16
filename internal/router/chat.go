@@ -88,7 +88,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				})
 			}
 
-			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
+			go Mybot.RespondToMessage(userInput.Message.ChannelID, parsed, userInput.Message.Reference(), userInput.WaitMessage)
 		}
 	}
 }
