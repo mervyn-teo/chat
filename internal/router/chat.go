@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 	"untitled/internal/bot"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -51,7 +50,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 		case userInput := <-messageChannel:
 			userID := userInput.Message.Author.ID
-			parsed, isSkip := parseUserInput(userInput.Message.Content)
+			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
 
 			if isSkip {
 				continue
@@ -66,10 +65,11 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			messages[userID] = append(currentMessages, ChatCompletionMessage{
 				Role:    ChatMessageRoleUser,
-				Content: parsed,
+				Content: parsedUserMsg,
 			})
 
 			aiResponseContent, err := SendMessage(client, messages[userInput.Message.Author.ID])
+
 			if err != nil {
 				log.Printf("Error getting response from OpenRouter: %v", err)
 				if len(messages) > 0 {
@@ -79,39 +79,40 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				}
 			}
 
-			parsed, recorded := parseModelResponse(aiResponseContent)
+			parsedAiMsg, isFunc := parseModelResponse(aiResponseContent)
 
-			if recorded {
+			messages[userID] = append(currentMessages, ChatCompletionMessage{
+				Role:    ChatMessageRoleAssistant,
+				Content: aiResponseContent,
+			})
+
+			responseToUser := parsedAiMsg
+
+			if isFunc {
+				// send the function response to AI
 				messages[userID] = append(currentMessages, ChatCompletionMessage{
-					Role:    ChatMessageRoleAssistant,
-					Content: parsed,
+					Role:    ChatMessageRoleUser,
+					Content: parsedAiMsg,
 				})
+
+				log.Println("Function invoked, sending to OpenRouter: " + parsedAiMsg)
+				aiResponseToFunction, err := SendMessage(client, messages[userInput.Message.Author.ID])
+
+				if err != nil {
+					log.Printf("Error getting response from OpenRouter: %v", err)
+					if len(messages) > 0 {
+						// Remove the last message if there's an error
+						messages[userID] = currentMessages[:len(messages)-1]
+						aiResponseToFunction = "There was an error processing your request. Please try again."
+					}
+				}
+
+				responseToUser = aiResponseToFunction
 			}
 
-			go Mybot.RespondToMessage(userInput.Message.ChannelID, parsed, userInput.Message.Reference(), userInput.WaitMessage)
+			go Mybot.RespondToMessage(userInput.Message.ChannelID, responseToUser, userInput.Message.Reference(), userInput.WaitMessage)
 		}
 	}
-}
-
-func parseModelResponse(modelResponse string) (string, bool) {
-	ret := modelResponse
-	var recorded bool = true
-
-	if strings.Contains(ret, "currDate()") {
-		currentTime := time.Now()
-		formattedDate := currentTime.Format("2006-01-02")
-		ret = strings.ReplaceAll(ret, "currDate()", formattedDate)
-		recorded = false
-	}
-
-	if strings.Contains(ret, "currTime()") {
-		currentTime := time.Now()
-		formattedTime := currentTime.Format("15:04:05")
-		ret = strings.ReplaceAll(ret, "currTime()", formattedTime)
-		recorded = false
-	}
-
-	return ret, recorded
 }
 
 func parseUserInput(userInput string) (parsed string, skip bool) {
