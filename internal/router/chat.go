@@ -91,7 +91,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			if isFunc {
 				// send the function response to AI
 				messages[userID] = append(currentMessages, ChatCompletionMessage{
-					Role:    "tool",
+					Role:    ChatMessageRoleUser,
 					Content: parsedAiMsg,
 				})
 
