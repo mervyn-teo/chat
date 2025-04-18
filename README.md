@@ -26,6 +26,7 @@ $ go build -o chat ./cmd/api
 - fill in the json with your own API keys
   - you can get your openRouter API key from [here](https://openrouter.ai/settings/keys)
   - you can get your Discord bot token from [here](https://discord.com/developers/applications)
+  - you can get your news API token from [here](https://currentsapi.services/)
 
 **5. Run the bot**
 ```bash
