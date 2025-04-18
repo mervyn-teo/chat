@@ -12,14 +12,16 @@ type Settings struct {
 	DiscordToken string `json:"discord_bot_token"`
 	Instructions string `json:"instructions"`
 	Model        string `json:"model"`
+	NewsAPIToken string `json:"news_api_key"`
 }
 
+var Setting Settings
+
 func LoadSettings(filePath string) (Settings, error) {
-	var settings Settings
 
 	jsonFile, err := os.Open(filePath)
 	if err != nil {
-		return settings, fmt.Errorf("error opening settings file '%s': %w", filePath, err)
+		return Setting, fmt.Errorf("error opening settings file '%s': %w", filePath, err)
 	}
 
 	defer func(jsonFile *os.File) {
@@ -31,17 +33,17 @@ func LoadSettings(filePath string) (Settings, error) {
 
 	byteValue, err := io.ReadAll(jsonFile)
 	if err != nil {
-		return settings, fmt.Errorf("error reading settings file: %w", err)
+		return Setting, fmt.Errorf("error reading settings file: %w", err)
 	}
 
-	err = json.Unmarshal(byteValue, &settings)
+	err = json.Unmarshal(byteValue, &Setting)
 	if err != nil {
-		return settings, fmt.Errorf("error decoding settings JSON: %w", err)
+		return Setting, fmt.Errorf("error decoding settings JSON: %w", err)
 	}
 
-	if settings.ApiKey == "" {
-		return settings, fmt.Errorf("api_key not found or empty in settings file (expected OpenRouter key)")
+	if Setting.ApiKey == "" {
+		return Setting, fmt.Errorf("api_key not found or empty in settings file (expected OpenRouter key)")
 	}
 
-	return settings, nil
+	return Setting, nil
 }
