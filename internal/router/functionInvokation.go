@@ -93,7 +93,7 @@ func currTime() string {
 func currDate() string {
 	// Implement the logic to get the current time
 	currdate := time.Now()
-	retdate := currdate.Format("30-12-2012")
+	retdate := currdate.Format("02-01-2006")
 	log.Printf("User requested current date: %s", retdate)
 	return retdate
 }
