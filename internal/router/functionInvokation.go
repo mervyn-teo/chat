@@ -43,7 +43,16 @@ func extractFunction(text string) string {
 
 	for i := 0; i < len(splitFunctions); i++ {
 		functionName := strings.Split(splitFunctions[i], "(")[0]
-		extractedArgs := strings.Split(splitFunctions[i], "(")[1]
+		args := strings.Split(splitFunctions[i], "(")
+		extractedArgs := ""
+
+		if len(args) < 2 {
+			// no brackets found
+			continue
+		} else {
+			extractedArgs = args[1]
+		}
+
 		extractedArgs = strings.ReplaceAll(extractedArgs, ")", "")
 		splitArgs := strings.Split(extractedArgs, ",")
 
