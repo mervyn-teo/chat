@@ -96,7 +96,7 @@ func currTime() string {
 	currtime := time.Now()
 	rettime := currtime.Format("15:04:05")
 	log.Printf("User requested current time: %s", rettime)
-	return rettime
+	return "current time is: " + rettime
 }
 
 func currDate() string {
@@ -104,7 +104,7 @@ func currDate() string {
 	currdate := time.Now()
 	retdate := currdate.Format("02-01-2006")
 	log.Printf("User requested current date: %s", retdate)
-	return retdate
+	return "current date is: " + retdate
 }
 
 func getNews() (string, error) {
@@ -142,5 +142,5 @@ func getNews() (string, error) {
 	}
 
 	log.Println("News response: " + string(body))
-	return string(body), nil
+	return "News: " + string(body), nil
 }
