@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"untitled/internal/bot"
+	"untitled/internal/tools"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -19,16 +20,68 @@ const (
 )
 
 func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (string, error) {
+	availableTools := tools.GetAvailableTools()
+	if len(availableTools) < 1 {
+		log.Println("Warning: No tools available for the model to use.")
+	}
+
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
 			Model:    OpenRouterModel,
 			Messages: messages,
+			Tools:    availableTools,
 		},
 	)
 
 	if err != nil {
 		return "", fmt.Errorf("chat completion failed: %w", err)
+	}
+
+	choice := resp.Choices[0]
+
+	if choice.FinishReason == openai.FinishReasonToolCalls && len(choice.Message.ToolCalls) > 0 {
+		log.Printf("Model wants to use tools. Number of tool calls: %d\n", len(choice.Message.ToolCalls))
+
+		followUpMessages := append(messages, choice.Message)
+		var toolResponses []openai.ChatCompletionMessage
+		for _, toolCall := range choice.Message.ToolCalls {
+			resultString, execErr := tools.ExecuteToolCall(toolCall)
+
+			if execErr != nil {
+				log.Printf("Failed to execute tool call %s (%s): %v", toolCall.ID, toolCall.Function.Name, execErr)
+				// The resultString should contain an AI-friendly error message
+			} else {
+				log.Printf("Successfully executed tool call %s (%s)", toolCall.ID, toolCall.Function.Name)
+			}
+
+			// Prepare the message with the function result for the next API call
+			toolResponses = append(toolResponses, openai.ChatCompletionMessage{
+				Role:       openai.ChatMessageRoleTool,
+				Content:    resultString,
+				ToolCallID: toolCall.ID,
+			})
+		}
+
+		followUpMessages = append(followUpMessages, toolResponses...)
+
+		fmt.Println("\n--- Sending follow-up request with tool results ---")
+
+		// Create the follow-up request with the updated message history
+		followUpReq := openai.ChatCompletionRequest{
+			Model:    OpenRouterModel, // Use the same model
+			Messages: followUpMessages,
+		}
+
+		log.Println("Sending follow-up request...")
+		finalResp, finalErr := client.CreateChatCompletion(context.Background(), followUpReq)
+		if finalErr != nil {
+			log.Fatalf("Error creating follow-up chat completion: %v", finalErr)
+		}
+
+		// The final response from the model, incorporating the tool results
+		fmt.Println("\n--- Final response from model ---")
+		return finalResp.Choices[0].Message.Content, nil
 	}
 
 	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == "" {
@@ -79,39 +132,13 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				}
 			}
 
-			parsedAiMsg, isFunc := parseModelResponse(aiResponseContent)
-
 			messages[userID] = append(currentMessages, ChatCompletionMessage{
 				Role:    ChatMessageRoleAssistant,
 				Content: aiResponseContent,
 			})
 
-			responseToUser := parsedAiMsg
-
-			if isFunc {
-				// send the function response to AI
-				messages[userID] = append(currentMessages, ChatCompletionMessage{
-					Role:    "tool",
-					Content: parsedAiMsg,
-				})
-
-				log.Println("Function invoked, sending to OpenRouter: " + parsedAiMsg)
-				aiResponseToFunction, err := SendMessage(client, messages[userInput.Message.Author.ID])
-
-				if err != nil {
-					log.Printf("Error getting response from OpenRouter: %v", err)
-					if len(messages) > 0 {
-						// Remove the last message if there's an error
-						messages[userID] = currentMessages[:len(messages)-1]
-						aiResponseToFunction = "There was an error processing your request. Please try again."
-					}
-				}
-
-				responseToUser = aiResponseToFunction
-			}
-
-			log.Println("Response to user: " + responseToUser)
-			go Mybot.RespondToMessage(userInput.Message.ChannelID, responseToUser, userInput.Message.Reference(), userInput.WaitMessage)
+			log.Println("Response to user: " + aiResponseContent)
+			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 		}
 	}
 }
