@@ -4,7 +4,7 @@
 Discord chatbot with AI integration using OpenRouter API.
 
 This bot is designed to provide a seamless chat experience by leveraging the power of AI to generate responses to user queries.
-This bot can execute functions declared by users (sadly, they are not very consistent now 😢). The goal is to achieve function calling abilities for LLMs that do not support [MCP](https://modelcontextprotocol.io/introduction). 
+This bot can execute functions that users have declared.  
 
 # Installation
 **1. Clone the repository**
