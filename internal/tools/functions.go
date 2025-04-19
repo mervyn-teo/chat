@@ -236,7 +236,6 @@ func searchNews(args SearchNewsArgs) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to parse base URL: %w", err)
 	}
-
 	// Add query parameters
 	params := url.Values{}
 	params.Add("language", "en")
@@ -313,6 +312,7 @@ func ExecuteToolCall(toolCall openai.ToolCall) (string, error) {
 		log.Printf("Received call for search_news. Parsing arguments.")
 		var args SearchNewsArgs
 		err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
+		log.Println(toolCall.Function.Arguments)
 
 		if err != nil {
 			log.Printf("Error parsing arguments for function '%s': %v", toolCall.Function.Name, err)
