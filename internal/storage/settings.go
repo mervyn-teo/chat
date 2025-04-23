@@ -13,6 +13,7 @@ type Settings struct {
 	Instructions string `json:"instructions"`
 	Model        string `json:"model"`
 	NewsAPIToken string `json:"news_api_key"`
+	YoutubeToken string `json:"youtube_api_key"`
 }
 
 var Setting Settings

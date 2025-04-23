@@ -169,7 +169,65 @@ func GetAvailableTools() []openai.Tool {
 		},
 	}
 
-	return []openai.Tool{timeTool, dateTool, newsTool, searchNewsTool} // Return a slice of all your tools
+	searchVideoTool := openai.Tool{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "search_video",
+			Description: "Search for specific video from youtube",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"keywords": map[string]interface{}{
+						"type":        "string",
+						"description": "Keywords to search for in the video",
+					},
+				},
+			},
+		},
+	}
+
+	return []openai.Tool{timeTool, dateTool, newsTool, searchNewsTool, searchVideoTool} // Return a slice of all your tools
+}
+
+func getVideo(keyWord string) (string, error) {
+	log.Println("Getting video...")
+	baseURL := "https://www.googleapis.com/youtube/v3/search"
+
+	// Construct the URL with query parameters
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse base URL: %w", err)
+	}
+
+	// Add query parameters
+	params := url.Values{}
+	params.Add("part", "snippet")
+	params.Add("q", keyWord)
+	params.Add("maxResults", "5") // Limit to 5 results
+	params.Add("type", "video")
+	params.Add("key", storage.Setting.YoutubeToken) // Use the API key from settings
+
+	u.RawQuery = params.Encode() // Encode and attach parameters
+	// Make the GET request
+	resp, err := http.Get(u.String())
+	if err != nil {
+		return "", fmt.Errorf("failed to make GET request: %w", err)
+	}
+
+	defer resp.Body.Close() // Ensure the response body is closed
+	// Check for successful response status code
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API request failed with status code: %d", resp.StatusCode)
+	}
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	log.Println("Video response: " + string(body))
+	return "Video: " + string(body), nil
 }
 
 func getCurrentTime() (string, error) {
@@ -321,6 +379,23 @@ func ExecuteToolCall(toolCall openai.ToolCall) (string, error) {
 
 		result, funcErr := searchNews(args)
 
+		if funcErr != nil {
+			log.Printf("Error executing function '%s': %v", toolCall.Function.Name, funcErr)
+			return fmt.Sprintf(`{"error": "Execution of function '%s' failed: %v"}`, toolCall.Function.Name, funcErr), fmt.Errorf("function execution failed: %w", funcErr)
+		}
+
+		return result, nil // Return the result string
+
+	case "search_video":
+		log.Printf("Received call for search_video. Parsing arguments.")
+		var args map[string]string
+		err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
+		if err != nil {
+			log.Printf("Error parsing arguments for function '%s': %v", toolCall.Function.Name, err)
+			return fmt.Sprintf(`{"error": "Failed to parse arguments for function '%s': %v"}`, toolCall.Function.Name, err), fmt.Errorf("argument parsing failed: %w", err)
+		}
+
+		result, funcErr := getVideo(args["keywords"])
 		if funcErr != nil {
 			log.Printf("Error executing function '%s': %v", toolCall.Function.Name, funcErr)
 			return fmt.Sprintf(`{"error": "Execution of function '%s' failed: %v"}`, toolCall.Function.Name, funcErr), fmt.Errorf("function execution failed: %w", funcErr)
