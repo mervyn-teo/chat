@@ -154,7 +154,7 @@ func GetAvailableTools() []openai.Tool {
 					},
 					"keywords": map[string]interface{}{
 						"type":        "string",
-						"description": "Keywords to search for in the news articles",
+						"description": "Keywords to search for in the news articles, MUST be in english",
 					},
 					"pageSize": map[string]interface{}{
 						"type":        "integer",
