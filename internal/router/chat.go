@@ -71,6 +71,7 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 		followUpReq := openai.ChatCompletionRequest{
 			Model:    OpenRouterModel, // Use the same model
 			Messages: followUpMessages,
+			Tools:    availableTools, // Include the tool calls in the follow-up request
 		}
 
 		log.Println("Sending follow-up request...")
