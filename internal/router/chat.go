@@ -40,7 +40,7 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 
 	choice := resp.Choices[0]
 
-	if choice.FinishReason == openai.FinishReasonToolCalls && len(choice.Message.ToolCalls) > 0 {
+	for choice.FinishReason == openai.FinishReasonToolCalls && len(choice.Message.ToolCalls) > 0 {
 		log.Printf("Model wants to use tools. Number of tool calls: %d\n", len(choice.Message.ToolCalls))
 
 		followUpMessages := append(messages, choice.Message)
@@ -76,8 +76,15 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 
 		log.Println("Sending follow-up request...")
 		finalResp, finalErr := client.CreateChatCompletion(context.Background(), followUpReq)
+
 		if finalErr != nil {
 			log.Fatalf("Error creating follow-up chat completion: %v", finalErr)
+		}
+
+		choice = finalResp.Choices[0]
+
+		if choice.FinishReason == openai.FinishReasonToolCalls {
+			continue
 		}
 
 		// The final response from the model, incorporating the tool results
