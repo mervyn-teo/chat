@@ -49,3 +49,8 @@ $ ./chat
 # Personalization
 You can customize the bot's behavior by modifying the `settings.json` file.
 - `instructions`: The instructions that will be sent to the AI model to set it up. This is the prompt that will be used as a basis to generate responses.
+
+# List of commands
+- `!ping` - the bot will respond with a `pong`
+- `!ask [text]` - initiate a chat with the bot
+- `!forget` - clears the memory of current user's chat with the bot 
