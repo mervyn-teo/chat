@@ -110,6 +110,15 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			return // Exit the loop
 
 		case userInput := <-messageChannel:
+
+			if *userInput.IsForget {
+				// Handle the forget command
+				messages[userInput.Message.Author.ID] = []ChatCompletionMessage{} // Handle the forget command
+				log.Printf("Forget command executed for user %s in channel %s", userInput.Message.Author.ID, userInput.Message.ChannelID)
+				go Mybot.RespondToMessage(userInput.Message.ChannelID, "Your message history has been cleared", userInput.Message.Reference(), userInput.WaitMessage)
+				continue
+			}
+
 			userID := userInput.Message.Author.ID
 			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
 

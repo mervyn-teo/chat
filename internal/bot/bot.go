@@ -23,6 +23,7 @@ type Bot struct {
 type MessageWithWait struct {
 	Message     *discordgo.MessageCreate
 	WaitMessage *discordgo.Message
+	IsForget    *bool
 }
 
 // NewBot creates a new Bot instance but doesn't connect yet
@@ -95,6 +96,7 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
+	isForget := false
 
 	switch {
 	case strings.HasPrefix(m.Content, "!ask"):
@@ -113,6 +115,7 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		msg := MessageWithWait{
 			Message:     m,
 			WaitMessage: refer,
+			IsForget:    &isForget,
 		}
 
 		b.addMessage(msg) // Add to internal queue
@@ -122,7 +125,23 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if err != nil {
 			log.Printf("Error sending pong: %v", err)
 		}
+
+	case strings.HasPrefix(m.Content, "!forget"):
+		refer, err := s.ChannelMessageSendReply(m.ChannelID, "Clearing message memory from bot...", m.Reference())
+		isForget := true
+
+		if err != nil {
+			log.Printf("Error sending ack for !forget: %v", err)
+			return
+		}
+
+		b.forgetMessage(MessageWithWait{
+			Message:     m,
+			WaitMessage: refer,
+			IsForget:    &isForget,
+		})
 	}
+
 }
 
 // addMessage adds a message to the internal queue
@@ -130,6 +149,22 @@ func (b *Bot) addMessage(message MessageWithWait) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.messageQueue = append(b.messageQueue, message)
+}
+
+func (b *Bot) forgetMessage(msg MessageWithWait) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	// Clear the message queue for the user
+	for i := len(b.messageQueue) - 1; i >= 0; i-- {
+		if b.messageQueue[i].Message.Author.ID == msg.Message.Author.ID && b.messageQueue[i].Message.ChannelID == msg.Message.ChannelID {
+			b.messageQueue = append(b.messageQueue[:i], b.messageQueue[i+1:]...)
+		}
+	}
+
+	log.Printf("Cleared messages for user %s in channel %s", msg.Message.Author.ID, msg.Message.ChannelID)
+
+	b.messageQueue = append(b.messageQueue, msg)
 }
 
 // RespondToMessage sends a message using the bot's session
