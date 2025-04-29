@@ -65,12 +65,6 @@ func (b *Bot) Start() error {
 	return b.Session.Close()
 }
 
-func checkNilErr(e error) { // Keep utility or handle errors inline/return them
-	if e != nil {
-		log.Fatalf("Fatal error: %v", e) // Log the actual error
-	}
-}
-
 // relayMessagesToRouter processes the internal queue
 func (b *Bot) relayMessagesToRouter() {
 	for {
@@ -193,6 +187,38 @@ func (b *Bot) RespondToMessage(channelId string, response string, ref *discordgo
 	_, err := b.Session.ChannelMessageSendComplex(channelId, sendMessage)
 	if err != nil {
 		log.Printf("Error sending message via RespondToMessage: %v", err)
+	}
+}
+
+func (b *Bot) RespondToLongMessage(channelId string, response []string, ref *discordgo.MessageReference, waitMessage *discordgo.Message) {
+	if b.Session == nil {
+		log.Println("Error: Bot session not initialized in RespondToMessage")
+		return
+	}
+
+	if waitMessage != nil {
+		err := b.Session.ChannelMessageDelete(waitMessage.ChannelID, waitMessage.ID)
+		if err != nil {
+			log.Printf("Error deleting message: %v", err)
+		}
+	} else {
+		log.Println("Error: waitMessage is nil in RespondToMessage")
+		return
+	}
+
+	for i := range response {
+		segment := response[i]
+
+		segment = "[Section " + fmt.Sprint(i+1) + "/" + fmt.Sprint(len(response)) + "]\n" + segment
+		sendMessage := &discordgo.MessageSend{
+			Content:   segment,
+			Reference: ref,
+		}
+
+		_, err := b.Session.ChannelMessageSendComplex(channelId, sendMessage)
+		if err != nil {
+			log.Printf("Error sending message via RespondToMessage: %v", err)
+		}
 	}
 }
 

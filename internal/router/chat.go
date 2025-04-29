@@ -40,6 +40,7 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 
 	choice := resp.Choices[0]
 
+	// Check if the model wants to use tools
 	for choice.FinishReason == openai.FinishReasonToolCalls && len(choice.Message.ToolCalls) > 0 {
 		log.Printf("Model wants to use tools. Number of tool calls: %d\n", len(choice.Message.ToolCalls))
 
@@ -155,9 +156,34 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			})
 
 			log.Println("Response to user: " + aiResponseContent)
+
+			if len(aiResponseContent) > 1900 {
+				// Split the response into chunks of 1900 characters
+				chunks := SplitString(aiResponseContent, 1900)
+				go Mybot.RespondToLongMessage(userInput.Message.ChannelID, chunks, userInput.Message.Reference(), userInput.WaitMessage)
+				continue
+			}
+
 			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 		}
 	}
+}
+
+func SplitString(s string, chunkSize int) []string {
+	log.Printf("Splitting string into chunks of size %d", chunkSize)
+	runes := []rune(s)
+	ret := make([]string, 0, len(runes)/chunkSize)
+	res := ""
+
+	for i, r := range runes {
+		res = res + string(r)
+		if i > 0 && ((i+1)%chunkSize == 0 || i == len(runes)-1) {
+			ret = append(ret, res)
+			res = ""
+		}
+	}
+
+	return ret
 }
 
 func parseUserInput(userInput string) (parsed string, skip bool) {
