@@ -44,6 +44,7 @@ $ ./chat
   - Selected permissions:
     - Read Messages
     - Send Messages
+- Under "Bot" tab, select "Privileged Gateway Intents" and enable "Message Content Intent"
 - Copy the generated URL and paste it into your browser
 - Select the server you want to invite the bot to and click "Authorize"
 
@@ -52,6 +53,6 @@ You can customize the bot's behavior by modifying the `settings.json` file.
 - `instructions`: The instructions that will be sent to the AI model to set it up. This is the prompt that will be used as a basis to generate responses.
 
 # List of commands
-- `!ping` - the bot will respond with a `pong`
-- `!ask [text]` - initiate a chat with the bot
-- `!forget` - clears the memory of current user's chat with the bot 
+- `!ping` - the bot will respond with a `pong` and tell you the latency
+- `@[bot] [text]` - initiate a chat with the bot
+- `!forget` - clears the memory of current user's chat with the bot

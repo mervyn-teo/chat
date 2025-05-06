@@ -190,7 +190,6 @@ func SplitString(s string, chunkSize int) []string {
 func parseUserInput(userInput string) (parsed string, skip bool) {
 
 	userInput = strings.TrimSpace(userInput)
-	userInput = strings.TrimPrefix(userInput, "!ask")
 
 	if userInput == "" {
 		return "", true

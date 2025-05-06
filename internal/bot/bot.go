@@ -15,7 +15,7 @@ import (
 type Bot struct {
 	Token          string
 	Session        *discordgo.Session
-	messageQueue   []MessageWithWait // Keep queue internal if needed
+	messageQueue   []MessageWithWait
 	mu             sync.Mutex
 	messageChannel chan *MessageWithWait // Channel for message processing
 }
@@ -92,19 +92,47 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 	isForget := false
 
+	botWasMentioned := false
+	for _, mention := range m.Mentions {
+		if mention.ID == s.State.User.ID {
+			botWasMentioned = true
+			break
+		}
+	}
+
+	if m.ReferencedMessage.Author.ID == s.State.User.ID {
+		botWasMentioned = true
+	}
+
 	switch {
-	case strings.HasPrefix(m.Content, "!ask"):
+	case botWasMentioned:
 		// Maybe process directly or queue if processing is long
 		refer, err := s.ChannelMessageSendReply(m.ChannelID, "Waiting for response...", m.Reference())
 
 		if err != nil {
-			log.Printf("Error sending ack for !ask: %v", err)
+			log.Printf("Error sending ack for @me: %v", err)
 		}
 
 		if refer == nil {
 			log.Println("Error: waiting message is nil")
 			return
 		}
+
+		m.Content = strings.ReplaceAll(m.Content, "<@"+s.State.User.ID+">", "@you")
+
+		if m.ReferencedMessage != nil {
+			referMsg := ""
+
+			if m.ReferencedMessage.Author.ID == s.State.User.ID {
+				referMsg = "you said: " + m.ReferencedMessage.Content
+			} else {
+				referMsg = m.ReferencedMessage.Author.Username + " said: " + m.ReferencedMessage.Content
+			}
+
+			m.Content = referMsg + "\n" + m.Author.Username + " says to you: " + m.Content
+		}
+
+		fmt.Println("Message content: ", m.Content)
 
 		msg := MessageWithWait{
 			Message:     m,
@@ -115,7 +143,9 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		b.addMessage(msg) // Add to internal queue
 
 	case strings.HasPrefix(m.Content, "!ping"):
-		_, err := s.ChannelMessageSend(m.ChannelID, "pong")
+		latency := time.Since(m.Timestamp)
+		pongMessage := fmt.Sprintf("Pong! Latency: %v", latency)
+		_, err := s.ChannelMessageSend(m.ChannelID, pongMessage)
 		if err != nil {
 			log.Printf("Error sending pong: %v", err)
 		}
