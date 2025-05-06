@@ -54,5 +54,5 @@ You can customize the bot's behavior by modifying the `settings.json` file.
 
 # List of commands
 - `!ping` - the bot will respond with a `pong` and tell you the latency
-- `@[bot] [text]` - initiate a chat with the bot
+- `@[bot] [text]` - initiate a chat with the bot, replying to the bot works too.
 - `!forget` - clears the memory of current user's chat with the bot
