@@ -38,6 +38,11 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 		return "", fmt.Errorf("chat completion failed: %w", err)
 	}
 
+	if len(resp.Choices) == 0 {
+		log.Println("received an empty response from API, trying again")
+		return "", fmt.Errorf("received an empty response from API")
+	}
+
 	choice := resp.Choices[0]
 
 	// Check if the model wants to use tools
@@ -82,6 +87,11 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 			log.Fatalf("Error creating follow-up chat completion: %v", finalErr)
 		}
 
+		if len(finalResp.Choices) == 0 {
+			log.Println("received an empty response from API, trying again")
+			return "", fmt.Errorf("received an empty response from API")
+		}
+
 		choice = finalResp.Choices[0]
 
 		if choice.FinishReason == openai.FinishReasonToolCalls {
@@ -91,10 +101,6 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 		// The final response from the model, incorporating the tool results
 		fmt.Println("\n--- Final response from model ---")
 		return finalResp.Choices[0].Message.Content, nil
-	}
-
-	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == "" {
-		return "", fmt.Errorf("received an empty or invalid response from API")
 	}
 
 	return resp.Choices[0].Message.Content, nil
