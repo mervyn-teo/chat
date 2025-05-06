@@ -101,7 +101,7 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 }
 
 func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string) {
-	messages := initRouter(instructions)
+	messages := initRouter()
 
 	for {
 		select {
@@ -114,7 +114,8 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			if *userInput.IsForget {
 				// Handle the forget command
-				messages[userInput.Message.Author.ID] = []ChatCompletionMessage{} // Handle the forget command
+				messages[userInput.Message.Author.ID] = setInitialMessages(instructions)
+
 				log.Printf("Forget command executed for user %s in channel %s", userInput.Message.Author.ID, userInput.Message.ChannelID)
 				go Mybot.RespondToMessage(userInput.Message.ChannelID, "Your message history has been cleared", userInput.Message.Reference(), userInput.WaitMessage)
 				continue
@@ -197,7 +198,7 @@ func parseUserInput(userInput string) (parsed string, skip bool) {
 	return userInput, false
 }
 
-func initRouter(instructions string) map[string][]ChatCompletionMessage {
+func initRouter() map[string][]ChatCompletionMessage {
 	messages := make(map[string][]ChatCompletionMessage)
 	return messages
 }
