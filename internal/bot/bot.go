@@ -100,7 +100,7 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	if m.ReferencedMessage.Author.ID == s.State.User.ID {
+	if m.ReferencedMessage.Author != nil && m.ReferencedMessage.Author.ID == s.State.User.ID {
 		botWasMentioned = true
 	}
 
