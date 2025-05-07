@@ -126,10 +126,10 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 			if m.ReferencedMessage.Author.ID == s.State.User.ID {
 				referMsg = "you said: " + m.ReferencedMessage.Content
 			} else {
-				referMsg = m.ReferencedMessage.Author.Username + " said: " + m.ReferencedMessage.Content
+				referMsg = m.ReferencedMessage.Author.ID + " said: " + m.ReferencedMessage.Content
 			}
 
-			m.Content = referMsg + "\n" + m.Author.Username + " says to you: " + m.Content
+			m.Content = referMsg + "\n" + m.Author.ID + " says to you: " + m.Content
 		}
 
 		fmt.Println("Message content: ", m.Content)

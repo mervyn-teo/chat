@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"untitled/internal/bot"
+	"untitled/internal/storage"
 	"untitled/internal/tools"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -106,8 +107,12 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 	return resp.Choices[0].Message.Content, nil
 }
 
-func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string) {
-	messages := initRouter()
+func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string) {
+	if messages == nil {
+		log.Println("Router loop: messages map is nil, initializing.")
+		messages = initRouter()
+		storage.SaveChatHistory(messages, chatFilepath)
+	}
 
 	for {
 		select {
@@ -120,7 +125,8 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			if *userInput.IsForget {
 				// Handle the forget command
-				messages[userInput.Message.Author.ID] = setInitialMessages(instructions)
+				messages[userInput.Message.Author.ID] = setInitialMessages(instructions, userInput.Message.Author.ID)
+				storage.SaveChatHistory(messages, chatFilepath)
 
 				log.Printf("Forget command executed for user %s in channel %s", userInput.Message.Author.ID, userInput.Message.ChannelID)
 				go Mybot.RespondToMessage(userInput.Message.ChannelID, "Your message history has been cleared", userInput.Message.Reference(), userInput.WaitMessage)
@@ -138,13 +144,14 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			if !userExists {
 				// First message from this user, initialize with system prompt
 				log.Printf("Initializing conversation for user: %s", userID)
-				currentMessages = setInitialMessages(instructions)
+				currentMessages = setInitialMessages(instructions, userID)
 			}
 
 			messages[userID] = append(currentMessages, ChatCompletionMessage{
 				Role:    ChatMessageRoleUser,
 				Content: parsedUserMsg,
 			})
+			storage.SaveChatHistory(messages, chatFilepath)
 
 			aiResponseContent, err := SendMessage(client, messages[userInput.Message.Author.ID])
 
@@ -157,10 +164,11 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				}
 			}
 
-			messages[userID] = append(currentMessages, ChatCompletionMessage{
+			messages[userID] = append(messages[userID], ChatCompletionMessage{
 				Role:    ChatMessageRoleAssistant,
 				Content: aiResponseContent,
 			})
+			storage.SaveChatHistory(messages, chatFilepath)
 
 			log.Println("Response to user: " + aiResponseContent)
 
@@ -208,11 +216,11 @@ func initRouter() map[string][]ChatCompletionMessage {
 	return messages
 }
 
-func setInitialMessages(instructions string) []ChatCompletionMessage {
+func setInitialMessages(instructions string, userID string) []ChatCompletionMessage {
 	return []ChatCompletionMessage{
 		{
 			Role:    ChatMessageRoleSystem,
-			Content: instructions,
+			Content: "You are talking to: " + userID + "\n" + instructions,
 		},
 	}
 }

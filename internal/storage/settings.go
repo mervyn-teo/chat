@@ -9,12 +9,13 @@ import (
 )
 
 type Settings struct {
-	ApiKey       string `json:"api_key"`
-	DiscordToken string `json:"discord_bot_token"`
-	Instructions string `json:"instructions"`
-	Model        string `json:"model"`
-	NewsAPIToken string `json:"news_api_key"`
-	YoutubeToken string `json:"youtube_api_key"`
+	ApiKey              string `json:"api_key"`
+	DiscordToken        string `json:"discord_bot_token"`
+	Instructions        string `json:"instructions"`
+	Model               string `json:"model"`
+	NewsAPIToken        string `json:"news_api_key"`
+	YoutubeToken        string `json:"youtube_api_key"`
+	ChatHistoryFilePath string `json:"chat_history_file_path"`
 }
 
 var Setting Settings
@@ -177,5 +178,4 @@ func setUpSettings(filepath string) {
 		log.Fatalln("Error writing settings file:", err)
 		return
 	}
-
 }

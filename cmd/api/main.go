@@ -15,10 +15,9 @@ import (
 )
 
 var (
-	apiKey        string
-	client        *openai.Client
-	discord_token string
-	settings      storage.Settings
+	client   *openai.Client
+	settings storage.Settings
+	messages map[string][]openai.ChatCompletionMessage
 )
 
 func init() {
@@ -28,11 +27,13 @@ func init() {
 	if err != nil {
 		log.Fatalf("Initialization failed: %v", err)
 	}
-	apiKey = settings.ApiKey
-	discord_token = settings.DiscordToken
+
+	// Check if the chat history file exists, if not create it
+	storage.CheckFileExistence(settings.ChatHistoryFilePath)
+	messages = storage.ReadChatHistory(settings.ChatHistoryFilePath)
 
 	// Create the OpenAI client
-	client, err = router.CreateClient(settings.Model, apiKey)
+	client, err = router.CreateClient(settings.Model, settings.ApiKey)
 	if err != nil {
 		log.Fatalf("Failed to create OpenAI client: %v", err)
 	}
@@ -43,7 +44,7 @@ func main() {
 	messageChannel := make(chan *bot.MessageWithWait)
 
 	// Create the bot instance
-	myBot, err := bot.NewBot(discord_token, messageChannel)
+	myBot, err := bot.NewBot(settings.DiscordToken, messageChannel)
 	if err != nil {
 		log.Fatalf("Failed to create Discord bot: %v", err)
 	}
@@ -62,7 +63,7 @@ func main() {
 	go func() {
 		defer wg.Done() // Signal completion when this goroutine exits
 		// Pass the cancellable context to the loop
-		router.MessageLoop(ctx, myBot, client, messageChannel, settings.Instructions)
+		router.MessageLoop(ctx, myBot, client, messageChannel, settings.Instructions, messages, settings.ChatHistoryFilePath)
 		log.Println("Router loop stopped.")
 	}()
 
@@ -90,20 +91,18 @@ func main() {
 	log.Printf("Received signal: %s. Initiating shutdown...", receivedSignal)
 
 	// --- Initiate Shutdown ---
-	// 1. Cancel the context to signal goroutines
+	// Cancel the context to signal goroutines
 	cancel()
 
-	// 2. Explicitly tell the bot to stop (replace with actual method)
 	log.Println("Stopping Discord bot...")
 
-	err = myBot.Stop() // Or myBot.Stop(), etc.
+	err = myBot.Stop()
 	if err != nil {
 		log.Printf("Error stopping bot: %v", err)
 	}
 
 	// --- Wait for Goroutines to Finish ---
 	log.Println("Waiting for routines to finish...")
-	// You can add a timeout to prevent hanging indefinitely if a goroutine misbehaves
 	waitChan := make(chan struct{})
 	go func() {
 		wg.Wait()
