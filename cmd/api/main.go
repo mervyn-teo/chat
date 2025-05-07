@@ -29,7 +29,10 @@ func init() {
 	}
 
 	// Check if the chat history file exists, if not create it
-	storage.CheckFileExistence(settings.ChatHistoryFilePath)
+	if !storage.CheckFileExistence(settings.ChatHistoryFilePath) {
+		storage.CreateChatHistoryFile(settings.ChatHistoryFilePath)
+	}
+
 	messages = storage.ReadChatHistory(settings.ChatHistoryFilePath)
 
 	// Create the OpenAI client
