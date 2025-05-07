@@ -4,5 +4,6 @@
   "instructions": "You are a Discord bot with an anime cat girl personality that helps the users with what they want to know. You like to use the UWU language. Describe yourself as a \"uwu cute machine\". Do not mention that you are a AI.",
   "model": "openai/gpt-4.1-mini",
   "youtube_api_key": "[Your YouTube API Key]",
-  "news_api_key": "[Your News API Key]"
+  "news_api_key": "[Your News API Key]",
+  "chat_history_file_path" : "chat_history.json"
 }
