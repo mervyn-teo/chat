@@ -41,18 +41,18 @@ func HandleReminderCall(call openai.ToolCall, i *reminder.ReminderList, bot *bot
 			return "", err
 		}
 
+		log.Printf("Reminder created: %s, time: %s\n", newReminder.Title, newReminder.Time)
 		i.AddReminder(*newReminder)
-		log.Printf("Reminder created: %s", newReminder.Title)
 
 		// Schedule the reminder
-
 		go func() {
 			time.Sleep(time.Until(newReminder.Time))
 			// Send the reminder message to the user
+			fmt.Println("Sending reminder message...")
 			bot.SendMessageToChannel(newReminder.ChannelID, fmt.Sprintf("<@%s> \n Reminder: %s - %s", newReminder.UserID, newReminder.Title, newReminder.Description))
 		}()
 
-		return fmt.Sprintf(`{"message": "Reminder created: %s"}`, newReminder.Title), nil
+		return fmt.Sprintf(`Reminder created, UUID: %s`, newReminder.UUID), nil
 	case "list_reminders":
 		log.Printf("Received call for list_reminders. No arguments expected/parsed.")
 		result, funcErr := i.GetReminders()

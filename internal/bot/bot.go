@@ -253,7 +253,7 @@ func (b *Bot) RespondToLongMessage(channelId string, response []string, ref *dis
 
 func (b *Bot) SendMessageToChannel(channelId string, message string) {
 	if b.Session == nil {
-		log.Println("Error: Bot session not initialized in RespondToMessage")
+		log.Println("Error: Bot session not initialized in SendMessageToChannel")
 		return
 	}
 
@@ -263,7 +263,7 @@ func (b *Bot) SendMessageToChannel(channelId string, message string) {
 
 	_, err := b.Session.ChannelMessageSendComplex(channelId, sendMessage)
 	if err != nil {
-		log.Printf("Error sending message via RespondToMessage: %v", err)
+		log.Printf("Error sending message via SendMessageChannel: %v", err)
 	}
 }
 
