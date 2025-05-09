@@ -2,6 +2,7 @@ package reminder
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/google/uuid"
 	"log"
 	"time"
@@ -22,11 +23,17 @@ type ReminderList struct {
 
 // NewReminder creates a new reminder, parsing the time from a string, the format is 2006-01-02T15:04:05
 func NewReminder(title, description, reminderTime, userID, channelID string) (*Reminder, error) {
-	parsedTime, err := time.Parse("2006-01-02T15:04:05", reminderTime)
+	parsedTime, err := time.Parse(time.RFC3339, reminderTime+"+08:00") // Parse the time string
 
 	if err != nil {
 		log.Println("Error parsing time:", err)
 		return nil, err
+	}
+
+	// Check if the parsed time is in the past
+	if parsedTime.Before(time.Now()) {
+		log.Println("Error: Reminder time is in the past")
+		return nil, errors.New("reminder time is in the past")
 	}
 
 	ret := &Reminder{

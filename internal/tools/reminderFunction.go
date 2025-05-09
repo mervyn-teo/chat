@@ -38,7 +38,7 @@ func HandleReminderCall(call openai.ToolCall, i *reminder.ReminderList, bot *bot
 
 		newReminder, err := reminder.NewReminder(args.Title, args.Description, args.Time, args.UserID, args.ChannelID)
 		if err != nil {
-			return "", err
+			return err.Error(), err
 		}
 
 		log.Printf("Reminder created: %s, time: %s\n", newReminder.Title, newReminder.Time)
@@ -46,6 +46,7 @@ func HandleReminderCall(call openai.ToolCall, i *reminder.ReminderList, bot *bot
 
 		// Schedule the reminder
 		go func() {
+			fmt.Println("time until reminder: ", time.Until(newReminder.Time))
 			time.Sleep(time.Until(newReminder.Time))
 			// Send the reminder message to the user
 			fmt.Println("Sending reminder message...")
