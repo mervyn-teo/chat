@@ -56,3 +56,9 @@ You can customize the bot's behavior by modifying the `settings.json` file.
 - `!ping` - the bot will respond with a `pong` and tell you the latency
 - `@[bot] [text]` - initiate a chat with the bot, replying to the bot works too.
 - `!forget` - clears the memory of current user's chat with the bot
+
+# Abilities
+You can ask the chatbot to do the following for you:
+- Scheduling reminders
+- Get current news
+- Find YouTube videos
