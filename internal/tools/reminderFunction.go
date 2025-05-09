@@ -51,6 +51,15 @@ func HandleReminderCall(call openai.ToolCall, i *reminder.ReminderList, bot *bot
 			// Send the reminder message to the user
 			fmt.Println("Sending reminder message...")
 			bot.SendMessageToChannel(newReminder.ChannelID, fmt.Sprintf("<@%s> \n Reminder: %s - %s", newReminder.UserID, newReminder.Title, newReminder.Description))
+
+			for n, r := range i.Reminders {
+				if r.UUID == newReminder.UUID {
+					i.Reminders = append(i.Reminders[:n], i.Reminders[n+1:]...)
+					return
+				}
+			}
+
+			log.Printf("Reminder with UUID %s not found in the list.", newReminder.UUID)
 		}()
 
 		return fmt.Sprintf(`Reminder created, UUID: %s`, newReminder.UUID), nil

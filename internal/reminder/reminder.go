@@ -25,6 +25,8 @@ type ReminderList struct {
 func NewReminder(title, description, reminderTime, userID, channelID string) (*Reminder, error) {
 	parsedTime, err := time.Parse(time.RFC3339, reminderTime+"+08:00") // Parse the time string
 
+	log.Println("Parsed time is: ", parsedTime)
+
 	if err != nil {
 		log.Println("Error parsing time:", err)
 		return nil, err

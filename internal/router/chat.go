@@ -156,7 +156,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			if *userInput.IsForget {
 				// Handle the forget command
-				messages[userInput.Message.Author.ID] = setInitialMessages(instructions, userInput.Message.Author.ID, userInput.Message.ChannelID)
+				messages[userInput.Message.Author.ID] = setInitialMessages(instructions, userInput.Message.Author.ID)
 				storage.SaveChatHistory(messages, chatFilepath)
 
 				log.Printf("Forget command executed for user %s in channel %s", userInput.Message.Author.ID, userInput.Message.ChannelID)
@@ -166,6 +166,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			userID := userInput.Message.Author.ID
 			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
+			parsedUserMsg = fmt.Sprintf("userID: %s, userName: %s said in channelID %s: %s", userID, userInput.Message.Author.Username, userInput.Message.ChannelID, parsedUserMsg)
 
 			if isSkip {
 				continue
@@ -175,7 +176,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			if !userExists {
 				// First message from this user, initialize with system prompt
 				log.Printf("Initializing conversation for user: %s", userID)
-				currentMessages = setInitialMessages(instructions, userID, userInput.Message.ChannelID)
+				currentMessages = setInitialMessages(instructions, userID)
 			}
 
 			messages[userID] = append(currentMessages, ChatCompletionMessage{
@@ -230,11 +231,11 @@ func initRouter() map[string][]ChatCompletionMessage {
 	return messages
 }
 
-func setInitialMessages(instructions string, userID string, channelId string) []ChatCompletionMessage {
+func setInitialMessages(instructions string, userID string) []ChatCompletionMessage {
 	return []ChatCompletionMessage{
 		{
 			Role:    ChatMessageRoleSystem,
-			Content: "You are talking to: " + userID + "\nIn channel: " + channelId + "\n" + instructions,
+			Content: "You are talking to: " + userID + "\n" + instructions,
 		},
 	}
 }
