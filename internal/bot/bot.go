@@ -244,11 +244,26 @@ func (b *Bot) RespondToLongMessage(channelId string, response []string, ref *dis
 			Content:   segment,
 			Reference: ref,
 		}
-
 		_, err := b.Session.ChannelMessageSendComplex(channelId, sendMessage)
 		if err != nil {
 			log.Printf("Error sending message via RespondToMessage: %v", err)
 		}
+	}
+}
+
+func (b *Bot) SendMessageToChannel(channelId string, message string) {
+	if b.Session == nil {
+		log.Println("Error: Bot session not initialized in RespondToMessage")
+		return
+	}
+
+	sendMessage := &discordgo.MessageSend{
+		Content: message,
+	}
+
+	_, err := b.Session.ChannelMessageSendComplex(channelId, sendMessage)
+	if err != nil {
+		log.Printf("Error sending message via RespondToMessage: %v", err)
 	}
 }
 

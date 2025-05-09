@@ -179,7 +179,52 @@ func GetAvailableTools() []openai.Tool {
 		},
 	}
 
-	return []openai.Tool{timeTool, dateTool, newsTool, searchNewsTool, searchVideoTool} // Return a slice of all your tools
+	createReminderTool := openai.Tool{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "create_reminder",
+			Description: "Create a reminder",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"title": map[string]interface{}{
+						"type":        "string",
+						"description": "The title of the reminder",
+					},
+					"description": map[string]interface{}{
+						"type":        "string",
+						"description": "The description of the reminder",
+					},
+					"time": map[string]interface{}{
+						"type":        "string",
+						"description": "The time of the reminder in 'YYYY-MM-DDTHH:MM:SS' format",
+					},
+					"user_id": map[string]interface{}{
+						"type":        "string",
+						"description": "The user ID to send the reminder to",
+					},
+					"channel_id": map[string]interface{}{
+						"type":        "string",
+						"description": "The channel ID to send the reminder to",
+					},
+				},
+			},
+		},
+	}
+
+	getRemindersTool := openai.Tool{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "list_reminders",
+			Description: "List all reminders",
+			Parameters: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+		},
+	}
+
+	return []openai.Tool{timeTool, dateTool, newsTool, searchNewsTool, searchVideoTool, createReminderTool, getRemindersTool} // Return a slice of all your tools
 }
 
 func ExecuteToolCall(toolCall openai.ToolCall) (string, error) {

@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"untitled/internal/bot"
+	"untitled/internal/reminder"
 	"untitled/internal/storage"
 	"untitled/internal/tools"
 
@@ -20,7 +21,9 @@ const (
 	ChatMessageRoleAssistant = openai.ChatMessageRoleAssistant
 )
 
-func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (string, error) {
+var reminders reminder.ReminderList
+
+func SendMessage(client *openai.Client, messages []ChatCompletionMessage, myBot *bot.Bot) (string, error) {
 	availableTools := tools.GetAvailableTools()
 	if len(availableTools) < 1 {
 		log.Println("Warning: No tools available for the model to use.")
@@ -52,11 +55,22 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 
 		followUpMessages := append(messages, choice.Message)
 		var toolResponses []openai.ChatCompletionMessage
-		for _, toolCall := range choice.Message.ToolCalls {
-			resultString, execErr := tools.ExecuteToolCall(toolCall)
 
-			if execErr != nil {
-				log.Printf("Failed to execute tool call %s (%s): %v", toolCall.ID, toolCall.Function.Name, execErr)
+		var resultString string
+		var err error
+
+		for _, toolCall := range choice.Message.ToolCalls {
+
+			// intersect reminder call
+			if strings.Contains(toolCall.Function.Name, "reminder") {
+				log.Printf("Reminder call detected. ID: %s", toolCall.ID)
+				resultString, err = tools.HandleReminderCall(toolCall, &reminders, myBot)
+			} else {
+				resultString, err = tools.ExecuteToolCall(toolCall)
+			}
+
+			if err != nil {
+				log.Printf("Failed to execute tool call %s (%s): %v", toolCall.ID, toolCall.Function.Name, err)
 				// The resultString should contain an AI-friendly error message
 			} else {
 				log.Printf("Successfully executed tool call %s (%s)", toolCall.ID, toolCall.Function.Name)
@@ -107,6 +121,23 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage) (strin
 	return resp.Choices[0].Message.Content, nil
 }
 
+func SplitString(s string, chunkSize int) []string {
+	log.Printf("Splitting string into chunks of size %d", chunkSize)
+	runes := []rune(s)
+	ret := make([]string, 0, len(runes)/chunkSize)
+	res := ""
+
+	for i, r := range runes {
+		res = res + string(r)
+		if i > 0 && ((i+1)%chunkSize == 0 || i == len(runes)-1) {
+			ret = append(ret, res)
+			res = ""
+		}
+	}
+
+	return ret
+}
+
 func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string) {
 	if messages == nil {
 		log.Println("Router loop: messages map is nil, initializing.")
@@ -125,7 +156,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			if *userInput.IsForget {
 				// Handle the forget command
-				messages[userInput.Message.Author.ID] = setInitialMessages(instructions, userInput.Message.Author.ID)
+				messages[userInput.Message.Author.ID] = setInitialMessages(instructions, userInput.Message.Author.ID, userInput.Message.ChannelID)
 				storage.SaveChatHistory(messages, chatFilepath)
 
 				log.Printf("Forget command executed for user %s in channel %s", userInput.Message.Author.ID, userInput.Message.ChannelID)
@@ -144,7 +175,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			if !userExists {
 				// First message from this user, initialize with system prompt
 				log.Printf("Initializing conversation for user: %s", userID)
-				currentMessages = setInitialMessages(instructions, userID)
+				currentMessages = setInitialMessages(instructions, userID, userInput.Message.ChannelID)
 			}
 
 			messages[userID] = append(currentMessages, ChatCompletionMessage{
@@ -153,7 +184,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			})
 			storage.SaveChatHistory(messages, chatFilepath)
 
-			aiResponseContent, err := SendMessage(client, messages[userInput.Message.Author.ID])
+			aiResponseContent, err := SendMessage(client, messages[userID], Mybot)
 
 			if err != nil {
 				log.Printf("Error getting response from OpenRouter: %v", err)
@@ -184,23 +215,6 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 	}
 }
 
-func SplitString(s string, chunkSize int) []string {
-	log.Printf("Splitting string into chunks of size %d", chunkSize)
-	runes := []rune(s)
-	ret := make([]string, 0, len(runes)/chunkSize)
-	res := ""
-
-	for i, r := range runes {
-		res = res + string(r)
-		if i > 0 && ((i+1)%chunkSize == 0 || i == len(runes)-1) {
-			ret = append(ret, res)
-			res = ""
-		}
-	}
-
-	return ret
-}
-
 func parseUserInput(userInput string) (parsed string, skip bool) {
 
 	userInput = strings.TrimSpace(userInput)
@@ -216,11 +230,11 @@ func initRouter() map[string][]ChatCompletionMessage {
 	return messages
 }
 
-func setInitialMessages(instructions string, userID string) []ChatCompletionMessage {
+func setInitialMessages(instructions string, userID string, channelId string) []ChatCompletionMessage {
 	return []ChatCompletionMessage{
 		{
 			Role:    ChatMessageRoleSystem,
-			Content: "You are talking to: " + userID + "\n" + instructions,
+			Content: "You are talking to: " + userID + "\nIn channel: " + channelId + "\n" + instructions,
 		},
 	}
 }
