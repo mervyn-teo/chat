@@ -10,15 +10,11 @@ import (
 
 type SearchNewsArgs struct {
 	EndDate    string `json:"endDate"`
-	NewsType   string `json:"newsType"`
-	Country    string `json:"country"`
-	Category   string `json:"category"`
 	PageNumber int    `json:"pageNumber"`
 	Domain     string `json:"domain"`
 	DomainsNot string `json:"domainsNot"`
 	Keywords   string `json:"keywords"`
 	PageSize   int    `json:"pageSize"`
-	Limit      int    `json:"limit"`
 }
 
 // GetAvailableTools returns a slice of openai.Tool definitions
@@ -73,66 +69,6 @@ func GetAvailableTools() []openai.Tool {
 						"format":      "date-time",
 						"description": "The end date for the news search in RFC 3339 format",
 					},
-					"newsType": map[string]interface{}{
-						"type":        "string",
-						"enum":        []string{"1", "2", "3"},
-						"description": "The type of news to search for. 1 (news), 2 (articles), 3 (discussion content)",
-					},
-					"country": map[string]interface{}{
-						"type":        "string",
-						"description": "The country code for the news search, in uppercase (e.g., 'US' for United States)",
-					},
-					"category": map[string]interface{}{
-						"type": "string",
-						"enum": []string{
-							"regional",
-							"technology",
-							"lifestyle",
-							"business",
-							"general",
-							"programming",
-							"science",
-							"entertainment",
-							"world",
-							"sports",
-							"finance",
-							"academia",
-							"politics",
-							"health",
-							"opinion",
-							"food",
-							"game",
-							"fashion",
-							"academic",
-							"crap",
-							"travel",
-							"culture",
-							"economy",
-							"environment",
-							"art",
-							"music",
-							"notsure",
-							"CS",
-							"education",
-							"redundant",
-							"television",
-							"commodity",
-							"movie",
-							"entrepreneur",
-							"review",
-							"auto",
-							"energy",
-							"celebrity",
-							"medical",
-							"gadgets",
-							"design",
-							"EE",
-							"security",
-							"mobile",
-							"estate",
-							"funny"},
-						"description": "The category of news to search for (e.g., 'technology', 'sports')",
-					},
 					"pageNumber": map[string]interface{}{
 						"type":        "integer",
 						"description": "The page number for pagination",
@@ -153,11 +89,8 @@ func GetAvailableTools() []openai.Tool {
 						"type":        "integer",
 						"description": "The number of articles to return per page, up to 20",
 					},
-					"limit": map[string]interface{}{
-						"type":        "integer",
-						"description": "The maximum number of articles to return, up to 20",
-					},
 				},
+				"required": []string{"keywords"},
 			},
 		},
 	}

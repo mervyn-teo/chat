@@ -23,7 +23,7 @@ const (
 
 var reminders reminder.ReminderList
 
-func SendMessage(client *openai.Client, messages []ChatCompletionMessage, myBot *bot.Bot) (string, error) {
+func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot *bot.Bot) (string, error) {
 	availableTools := tools.GetAvailableTools()
 	if len(availableTools) < 1 {
 		log.Println("Warning: No tools available for the model to use.")
@@ -33,7 +33,7 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage, myBot 
 		context.Background(),
 		openai.ChatCompletionRequest{
 			Model:    OpenRouterModel,
-			Messages: messages,
+			Messages: *messages,
 			Tools:    availableTools,
 		},
 	)
@@ -53,7 +53,8 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage, myBot 
 	for choice.FinishReason == openai.FinishReasonToolCalls && len(choice.Message.ToolCalls) > 0 {
 		log.Printf("Model wants to use tools. Number of tool calls: %d\n", len(choice.Message.ToolCalls))
 
-		followUpMessages := append(messages, choice.Message)
+		followUpMessages := append(*messages, choice.Message)
+		*messages = append(*messages, choice.Message)
 		var toolResponses []openai.ChatCompletionMessage
 
 		var resultString string
@@ -85,6 +86,7 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage, myBot 
 		}
 
 		followUpMessages = append(followUpMessages, toolResponses...)
+		*messages = append(*messages, toolResponses...)
 
 		fmt.Println("\n--- Sending follow-up request with tool results ---")
 
@@ -101,6 +103,8 @@ func SendMessage(client *openai.Client, messages []ChatCompletionMessage, myBot 
 		if finalErr != nil {
 			log.Fatalf("Error creating follow-up chat completion: %v", finalErr)
 		}
+
+		*messages = append(*messages, finalResp.Choices[0].Message)
 
 		if len(finalResp.Choices) == 0 {
 			log.Println("received an empty response from API, trying again")
@@ -191,7 +195,8 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			})
 			storage.SaveChatHistory(messages, chatFilepath)
 
-			aiResponseContent, err := SendMessage(client, messages[userID], Mybot)
+			msg := messages[userID]
+			aiResponseContent, err := SendMessage(client, &msg, Mybot)
 
 			if err != nil {
 				log.Printf("Error getting response from OpenRouter: %v", err)
@@ -201,6 +206,8 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 					aiResponseContent = "There was an error processing your request. Please try again."
 				}
 			}
+
+			messages[userID] = msg
 
 			messages[userID] = append(messages[userID], ChatCompletionMessage{
 				Role:    ChatMessageRoleAssistant,
