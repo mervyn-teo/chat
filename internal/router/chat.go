@@ -139,6 +139,12 @@ func SplitString(s string, chunkSize int) []string {
 }
 
 func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string) {
+	err := reminder.LoadRemindersFromFile(&reminders)
+	if err != nil {
+		log.Println("Error loading reminders from file:", err)
+		return
+	}
+
 	if messages == nil {
 		log.Println("Router loop: messages map is nil, initializing.")
 		messages = initRouter()

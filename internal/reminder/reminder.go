@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"log"
 	"time"
+	"untitled/internal/storage"
 )
 
 type Reminder struct {
@@ -66,6 +67,13 @@ func (r *ReminderList) GetReminders() (string, error) {
 
 func (r *ReminderList) AddReminder(reminder Reminder) {
 	r.Reminders = append(r.Reminders, reminder)
+
+	err := r.SaveRemindersToFile()
+	if err != nil {
+		log.Println("Error saving reminders to file:", err)
+		return
+	}
+
 	log.Printf("Added reminder: %s", reminder.Title)
 }
 
@@ -74,9 +82,75 @@ func (r *ReminderList) RemoveReminder(uuid string) {
 		if reminder.UUID == uuid {
 			r.Reminders = append(r.Reminders[:i], r.Reminders[i+1:]...)
 			log.Printf("Removed reminder: %s", reminder.Title)
+
+			err := r.SaveRemindersToFile()
+			if err != nil {
+				log.Println("Error saving reminders to file:", err)
+				return
+			}
+
 			return
 		}
 	}
 
 	log.Printf("No reminder found with UUID: %s", uuid)
+}
+
+func (r *ReminderList) SaveRemindersToFile() error {
+	data, err := json.MarshalIndent(r, "", "  ")
+	if err != nil {
+		log.Println("Error marshalling reminders:", err)
+		return err
+	}
+
+	err = storage.WriteToFile("reminders.json", data)
+	if err != nil {
+		log.Println("Error writing reminders to file:", err)
+		return err
+	}
+
+	log.Println("Saved reminders to file:", r.Reminders)
+	return nil
+}
+
+func LoadRemindersFromFile(r *ReminderList) error {
+	if !storage.CheckFileExistence("reminders.json") {
+		log.Println("Reminders file does not exist. Creating a new one.")
+		err := storage.CreateFile("reminders.json")
+
+		if err != nil {
+			log.Println("Error creating reminders file:", err)
+			return err
+		}
+		tempReminder := ReminderList{}
+		byteFile, err := json.Marshal(tempReminder)
+
+		if err != nil {
+			log.Println("Error marshalling empty reminders:", err)
+			return err
+		}
+
+		err = storage.WriteToFile("reminders.json", byteFile)
+		if err != nil {
+			log.Println("Error writing empty reminders to file:", err)
+			return err
+		}
+
+		return nil
+	}
+
+	byteFile, err := storage.ReadFromFile("reminders.json")
+	if err != nil {
+		log.Println("Error reading reminders file:", err)
+		return err
+	}
+
+	err = json.Unmarshal(byteFile, r)
+	if err != nil {
+		log.Println("Error unmarshalling reminders:", err)
+		return err
+	}
+
+	log.Println("Loaded reminders from file:", r.Reminders)
+	return nil
 }
