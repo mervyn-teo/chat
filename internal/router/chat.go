@@ -104,12 +104,12 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 			log.Fatalf("Error creating follow-up chat completion: %v", finalErr)
 		}
 
-		*messages = append(*messages, finalResp.Choices[0].Message)
-
 		if len(finalResp.Choices) == 0 {
-			log.Println("received an empty response from API, trying again")
-			return "", fmt.Errorf("received an empty response from API")
+			log.Println("received an empty response from openRouter, trying again")
+			return "", fmt.Errorf("received an empty response from openRouter")
 		}
+
+		*messages = append(*messages, finalResp.Choices[0].Message)
 
 		choice = finalResp.Choices[0]
 
