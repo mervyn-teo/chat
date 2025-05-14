@@ -281,3 +281,68 @@ func (b *Bot) Stop() error {
 	log.Println("Bot stopped.")
 	return nil
 }
+
+func (b *Bot) JoinVC(guildID string, channelID string) (*discordgo.VoiceConnection, error) {
+	currSession := b.Session
+
+	if currSession == nil {
+		log.Println("Error: Bot session not initialized in JoinVC")
+		return nil, fmt.Errorf("session not initialized")
+	}
+
+	vc, err := currSession.ChannelVoiceJoin(guildID, channelID, false, false)
+	if err != nil {
+		log.Printf("Error joining voice channel: %v", err)
+		return nil, err
+	}
+
+	if vc == nil {
+		log.Println("Error: Voice connection is nil")
+		return nil, fmt.Errorf("voice connection is nil")
+	}
+
+	return vc, nil
+}
+
+func (b *Bot) LeaveVC(guildID string, channelID string) {
+	currSession := b.Session
+
+	if currSession == nil {
+		log.Println("Error: Bot session not initialized in LeaveVC")
+		return
+	}
+
+	voiceChats := currSession.VoiceConnections
+
+	if len(voiceChats) == 0 {
+		log.Println("Error: No active voice connections")
+		return
+	}
+
+	vc := voiceChats[guildID]
+
+	err := vc.Disconnect()
+
+	if err != nil {
+		log.Printf("Error leaving voice channel: %v", err)
+		return
+	}
+}
+
+func (b *Bot) JoinVc(gId string, cId string) (*discordgo.VoiceConnection, error) {
+
+	// check if connection already exists
+	if _, ok := b.Session.VoiceConnections[gId]; ok {
+		log.Println("Already connected to voice channel")
+		return nil, fmt.Errorf("already connected to voice channel")
+	}
+
+	vc, err := b.Session.ChannelVoiceJoin(gId, cId, false, false)
+
+	if err != nil {
+		log.Printf("Error joining voice channel: %v", err)
+		return nil, err
+	}
+
+	return vc, nil
+}

@@ -1,3 +1,4 @@
 settings.json
 chat_history.json
 reminders.json
+*_test.go
