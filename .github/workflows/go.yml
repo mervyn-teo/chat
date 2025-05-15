@@ -35,7 +35,7 @@ jobs:
           api_key: ${{secrets.api_key}}
           youtube_api_key: ${{secrets.youtube_api_key}}
           news_api_key: ${{secrets.news_api_key}}
-          discord_bot_token: ${{secretes.discord_bot_token}}
+          discord_bot_token: ${{secrets.discord_bot_token}}
         
 
   deploy:
