@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 func setup() {
 	err := godotenv.Load("../../.env")
 	if err != nil {
-		panic("Error loading .env file")
+		fmt.Printf("Error loading .env file: %v\n", err)
 	}
 
 	settings := storage.Settings{
