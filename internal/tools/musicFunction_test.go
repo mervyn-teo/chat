@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"github.com/joho/godotenv"
 	"github.com/sashabaranov/go-openai"
 	"os"
 	"sync"
@@ -16,6 +17,7 @@ var (
 	myBot          *bot.Bot
 	messageChannel chan *bot.MessageWithWait
 	songlist       music.SongList
+	songMap        map[string]map[string]*music.SongList = make(map[string]map[string]*music.SongList)
 )
 
 func TestMain(m *testing.M) {
@@ -25,10 +27,20 @@ func TestMain(m *testing.M) {
 }
 
 func setup() {
-	settings, err := storage.LoadSettings("settings.json")
+	err := godotenv.Load("../../.env")
 	if err != nil {
-		panic("Failed to load settings: " + err.Error())
+		panic("Error loading .env file")
 	}
+
+	settings := storage.Settings{
+		ApiKey:       os.Getenv("api_key"),
+		DiscordToken: os.Getenv("discord_bot_token"),
+		Instructions: "You are a Discord bot with an anime cat girl personality that helps the users with what they want to know. You like to use the UWU language. Describe yourself as a \\\"uwu cute machine\\\". Do not mention that you are a AI. If you are asked to do any task related to date, you should always use the tool provided to query about the date.",
+		Model:        "openai/gpt-4.1",
+		NewsAPIToken: os.Getenv("news_api_key"),
+		YoutubeToken: os.Getenv("youtube_api_key"),
+	}
+
 	messageChannel = make(chan *bot.MessageWithWait)
 	myBot, err = bot.NewBot(settings.DiscordToken, messageChannel)
 	if err != nil {
@@ -82,16 +94,24 @@ func mockSonglist() {
 		Id:    "02Q4yUMw3Ds",
 		Url:   "https://www.youtube.com/watch?v=02Q4yUMw3Ds&list=RDMM&start_radio=1",
 	})
+
+	songMap[os.Getenv("test_guild_id")] = make(map[string]*music.SongList)
+	songMap[os.Getenv("test_guild_id")][os.Getenv("test_channel_id")] = &songlist
 }
 
 func TestPlayMusic(t *testing.T) {
 	mockSonglist()
-	msg, err := playSong(&songlist, myBot)
+	call := openai.ToolCall{
+		Function: openai.FunctionCall{
+			Arguments: `{"gid": "` + os.Getenv("test_guild_id") + `", "cid": "` + os.Getenv("test_channel_id") + `"}`,
+		},
+	}
+	msg, err := playSong(call, &songMap, myBot)
 	time.Sleep(10 * time.Second)
 	if err != nil {
 		return
 	}
-	if msg != `{"message": "Playing song successfully", "song": {"title": "Song 1", "Id": "d3J3uJpCgos"}}` {
+	if msg != `Playing song successfully, song title: Song 1, song Id: d3J3uJpCgos` {
 		t.Errorf("Expected song to be played successfully, got: %s", msg)
 	}
 	err = songlist.StopSong()
@@ -105,11 +125,11 @@ func TestAddSong(t *testing.T) {
 	mockFunctionCall := openai.ToolCall{
 		Function: openai.FunctionCall{
 			Name:      "add_song",
-			Arguments: `{"title": "Song 4", "url": "https://www.youtube.com/watch?v=cLdWfNbBMvc"}`,
+			Arguments: `{"gid": "` + os.Getenv("test_guild_id") + `", "cid": "` + os.Getenv("test_channel_id") + `", "title": "Song 4", "url": "https://www.youtube.com/watch?v=cLdWfNbBMvc"}`,
 		},
 	}
 
-	msg, err := addSong(mockFunctionCall, &songlist)
+	msg, err := addSong(mockFunctionCall, &songMap)
 	if err != nil {
 		return
 	}
@@ -125,50 +145,59 @@ func TestRemoveSong(t *testing.T) {
 	mockFunctionCall := openai.ToolCall{
 		Function: openai.FunctionCall{
 			Name:      "remove_song",
-			Arguments: `{"uuid": "d3J3uJpCgos"}`,
+			Arguments: `{"gid": "` + os.Getenv("test_guild_id") + `", "cid": "` + os.Getenv("test_channel_id") + `", "uuid": "d3J3uJpCgos"}`,
 		},
 	}
 
-	msg, err := removeSong(mockFunctionCall, &songlist)
+	msg, err := removeSong(mockFunctionCall, &songMap)
 	if err != nil {
 		return
 	}
 
 	fmt.Println("msg: ", msg)
-	if msg != `{"message": "Song removed successfully", "song": {"title": "d3J3uJpCgos", "url": "d3J3uJpCgos"}}` {
+	if msg != `Song removed successfully, song title: "d3J3uJpCgos, song url: d3J3uJpCgos` {
 		t.Errorf("Expected song to be removed successfully, got: %s", msg)
 	}
 }
 
 func TestGetCurrentSongList(t *testing.T) {
 	mockSonglist()
-	msg, err := getCurrentSongList(&songlist)
+	call := openai.ToolCall{
+		Function: openai.FunctionCall{
+			Arguments: `{"gid": "` + os.Getenv("test_guild_id") + `", "cid": "` + os.Getenv("test_channel_id") + `"}`,
+		},
+	}
+	msg, err := getCurrentSongList(call, &songMap)
 	if err != nil {
 		return
 	}
-	fmt.Println("msg: ", msg)
-	if msg != `{"songs": [Song: Song 1, ID: d3J3uJpCgos, URL: https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB
+	if msg != `songs: [Song: Song 1, ID: d3J3uJpCgos, URL: https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB
 Song: Song 2, ID: 1MvvFXBWFjI, URL: https://www.youtube.com/watch?v=1MvvFXBWFjI&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=2&pp=gAQBiAQB8AUB
 Song: Song 3, ID: kzZ6KXDM1RI, URL: https://www.youtube.com/watch?v=kzZ6KXDM1RI&pp=ygUQeXV1cmkgZHJ5IGZsb3dlctIHCQmGCQGHKiGM7w%3D%3D
 Song: Song 4, ID: 02Q4yUMw3Ds, URL: https://www.youtube.com/watch?v=02Q4yUMw3Ds&list=RDMM&start_radio=1
-]}` {
+]` {
 		t.Errorf("Expected song list to be retrieved successfully, got: %s", msg)
 	}
 }
 
 func TestSkipSongWhilePlaying(t *testing.T) {
 	mockSonglist()
-	_, err := playSong(&songlist, myBot)
+	call := openai.ToolCall{
+		Function: openai.FunctionCall{
+			Arguments: `{"gid": "` + os.Getenv("test_guild_id") + `", "cid": "` + os.Getenv("test_channel_id") + `"}`,
+		},
+	}
+	_, err := playSong(call, &songMap, myBot)
 	if err != nil {
 		return
 	}
 	time.Sleep(10 * time.Second)
-	msg, err := skipSong(&songlist, myBot)
+	msg, err := skipSong(call, &songMap, myBot)
 	if err != nil {
 		return
 	}
 	time.Sleep(10 * time.Second)
-	if msg != `{"message": "Song skipped successfully", "song": {"title": "Song 2", "Id": "1MvvFXBWFjI"}}` {
+	if msg != `Song skipped successfully, song title: Song 2, song Id: 1MvvFXBWFjI` {
 		t.Errorf("Expected song to be skipped successfully, got: %s", msg)
 	}
 	err = songlist.StopSong()
@@ -179,32 +208,42 @@ func TestSkipSongWhilePlaying(t *testing.T) {
 
 func TestPauseSong(t *testing.T) {
 	mockSonglist()
-	_, err := playSong(&songlist, myBot)
+	call := openai.ToolCall{
+		Function: openai.FunctionCall{
+			Arguments: `{"gid": "` + os.Getenv("test_guild_id") + `", "cid": "` + os.Getenv("test_channel_id") + `"}`,
+		},
+	}
+	_, err := playSong(call, &songMap, myBot)
 	if err != nil {
 		return
 	}
 	time.Sleep(10 * time.Second)
-	msg, err := pauseSong(&songlist, myBot)
+	msg, err := pauseSong(call, &songMap)
 	if err != nil {
 		return
 	}
-	if msg != `{"message": "Song paused successfully"}` {
+	if msg != `Song paused successfully` {
 		t.Errorf("Expected song to be paused successfully, got: %s", msg)
 	}
 }
 
 func TestStopSong(t *testing.T) {
 	mockSonglist()
-	_, err := playSong(&songlist, myBot)
+	call := openai.ToolCall{
+		Function: openai.FunctionCall{
+			Arguments: `{"gid": "` + os.Getenv("test_guild_id") + `", "cid": "` + os.Getenv("test_channel_id") + `"}`,
+		},
+	}
+	_, err := playSong(call, &songMap, myBot)
 	if err != nil {
 		return
 	}
 	time.Sleep(10 * time.Second)
-	msg, err := stopSong(&songlist, myBot)
+	msg, err := stopSong(call, &songMap)
 	if err != nil {
 		return
 	}
-	if msg != `{"message": "Song stopped successfully"}` {
+	if msg != `Song stopped successfully` {
 		t.Errorf("Expected song to be stopped successfully, got: %s", msg)
 	}
 }

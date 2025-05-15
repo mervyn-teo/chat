@@ -17,13 +17,12 @@ import (
 type ChatCompletionMessage = openai.ChatCompletionMessage
 
 const (
-	ChatMessageRoleSystem    = openai.ChatMessageRoleSystem
-	ChatMessageRoleUser      = openai.ChatMessageRoleUser
-	ChatMessageRoleAssistant = openai.ChatMessageRoleAssistant
+	ChatMessageRoleSystem = openai.ChatMessageRoleSystem
+	ChatMessageRoleUser   = openai.ChatMessageRoleUser
 )
 
 var reminders reminder.ReminderList
-var songList music.SongList
+var songMap map[string]map[string]*music.SongList = make(map[string]map[string]*music.SongList)
 
 func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot *bot.Bot) (string, error) {
 	availableTools := tools.GetAvailableTools()
@@ -115,6 +114,11 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 		return finalResp.Choices[0].Message.Content, nil
 	}
 
+	if choice.FinishReason != openai.FinishReasonStop {
+		*messages = append(*messages, resp.Choices[0].Message)
+		return choice.Message.Content, nil
+	}
+
 	return resp.Choices[0].Message.Content, nil
 }
 
@@ -127,9 +131,9 @@ func runFunctionCall(toolCall openai.ToolCall, myBot *bot.Bot) (string, error) {
 	if strings.Contains(toolCall.Function.Name, "reminder") {
 		log.Printf("Reminder call detected. ID: %s", toolCall.ID)
 		resultString, err = tools.HandleReminderCall(toolCall, &reminders, myBot)
-	} else if strings.Contains(toolCall.Function.Name, "music") {
+	} else if strings.Contains(toolCall.Function.Name, "song") {
 		log.Printf("Music call detected. ID: %s", toolCall.ID)
-		//resultString, err = tools.HandleMusicCall(toolCall, &songList, myBot)
+		resultString, err = tools.HandleMusicCall(toolCall, &songMap, myBot)
 	} else {
 		log.Printf("Normal function call detected. ID: %s\n", toolCall.ID)
 		resultString, err = tools.ExecuteToolCall(toolCall)
@@ -172,8 +176,6 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 		messages = initRouter()
 		storage.SaveChatHistory(messages, chatFilepath)
 	}
-
-	songList.IsPlaying = false
 
 	for {
 		select {
@@ -229,10 +231,6 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			messages[userID] = msg
 
-			messages[userID] = append(messages[userID], ChatCompletionMessage{
-				Role:    ChatMessageRoleAssistant,
-				Content: aiResponseContent,
-			})
 			storage.SaveChatHistory(messages, chatFilepath)
 
 			log.Println("Response to user: " + aiResponseContent)

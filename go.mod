@@ -3,11 +3,12 @@ module untitled
 go 1.24.2
 
 require (
-	github.com/bwmarrin/dgvoice v0.0.0-20210225172318-caaac756e02e
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	github.com/kkdai/youtube/v2 v2.10.4
 	github.com/sashabaranov/go-openai v1.38.3
+	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
 
 require (
@@ -20,5 +21,4 @@ require (
 	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
-	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32 // indirect
 )

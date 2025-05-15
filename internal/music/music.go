@@ -15,10 +15,6 @@ import (
 	"untitled/internal/storage"
 )
 
-var (
-	opusSampleRate = []int{48000, 24000, 16000, 12000, 8000}
-)
-
 type SongList struct {
 	Songs     []Song `json:"songs"`
 	IsPlaying bool   `json:"is_playing"`
@@ -26,16 +22,6 @@ type SongList struct {
 	Vc        *discordgo.VoiceConnection
 	StopSig   chan bool
 }
-
-type AddSongArgs struct {
-	Title string `json:"title"`
-	Url   string `json:"url"`
-}
-
-type RemoveSongArgs struct {
-	UUID string `json:"uuid"`
-}
-
 type Song struct {
 	Title string `json:"title"`
 	Id    string `json:"id"`
@@ -96,6 +82,7 @@ func DownloadSong(url string) (string, error) {
 	return filePath, nil
 }
 
+// PlaySong plays the audio file using the voice connection. gid and cid are the guild and channel IDs.
 func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot) error {
 	// check if the song list is empty
 	if len(s.Songs) <= 0 {
@@ -144,7 +131,7 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot) error {
 
 					// play the next song
 					go func() {
-						err = s.PlaySong(bot)
+						err = s.PlaySong(gid, cid, bot)
 						if err != nil {
 							fmt.Println("Error playing song:", err)
 						}
@@ -234,4 +221,16 @@ func (s *SongList) PauseSong() error {
 	}
 	s.Mu.Unlock()
 	return nil
+}
+
+func NewSongList() *SongList {
+	ret := SongList{
+		Songs:     make([]Song, 0),
+		IsPlaying: false,
+		Mu:        sync.Mutex{},
+		Vc:        nil,
+		StopSig:   make(chan bool),
+	}
+
+	return &ret
 }

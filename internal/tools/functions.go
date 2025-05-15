@@ -157,7 +157,151 @@ func GetAvailableTools() []openai.Tool {
 		},
 	}
 
-	return []openai.Tool{timeTool, dateTool, newsTool, searchNewsTool, searchVideoTool, createReminderTool, getRemindersTool} // Return a slice of all your tools
+	stopSongTool := openai.Tool{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "stop_song",
+			Description: "Stop the song that is playing right now.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"gid": map[string]interface{}{
+						"type":        "string",
+						"description": "The guild ID where the song should be played",
+					},
+					"cid": map[string]interface{}{
+						"type":        "string",
+						"description": "The channel ID where the song should be played",
+					},
+				},
+				"required": []string{"gid", "cid"},
+			},
+		},
+	}
+
+	skipSongTool := openai.Tool{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "skip_song",
+			Description: "Skip to the next song in the song list.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"gid": map[string]interface{}{
+						"type":        "string",
+						"description": "The guild ID where the song should be played",
+					},
+					"cid": map[string]interface{}{
+						"type":        "string",
+						"description": "The channel ID where the song should be played",
+					},
+				},
+				"required": []string{"gid", "cid"},
+			},
+		},
+	}
+
+	playSongTool := openai.Tool{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "play_song",
+			Description: "Play songs from the song list in a voice channel.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"gid": map[string]interface{}{
+						"type":        "string",
+						"description": "The guild ID where the song should be played",
+					},
+					"cid": map[string]interface{}{
+						"type":        "string",
+						"description": "The channel ID where the song should be played",
+					},
+				},
+				"required": []string{"gid", "cid"},
+			},
+		},
+	}
+
+	removeSongTool := openai.Tool{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "remove_song",
+			Description: "Remove a song from the song list.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"uuid": map[string]interface{}{
+						"type":        "string",
+						"description": "The UUID of the song to remove",
+					},
+					"gid": map[string]interface{}{
+						"type":        "string",
+						"description": "The guild ID where the song should be played",
+					},
+					"cid": map[string]interface{}{
+						"type":        "string",
+						"description": "The channel ID where the song should be played",
+					},
+				},
+				"required": []string{"gid", "cid", "uuid"},
+			},
+		},
+	}
+
+	addSongTool := openai.Tool{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "add_song",
+			Description: "Add a song to the song list.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"title": map[string]interface{}{
+						"type":        "string",
+						"description": "The title of the song to add",
+					},
+					"url": map[string]interface{}{
+						"type":        "string",
+						"description": "The URL of the song to add",
+					},
+					"gid": map[string]interface{}{
+						"type":        "string",
+						"description": "The guild ID where the song should be played",
+					},
+					"cid": map[string]interface{}{
+						"type":        "string",
+						"description": "The channel ID where the song should be played",
+					},
+				},
+				"required": []string{"gid", "cid", "title", "url"},
+			},
+		},
+	}
+
+	getCurrentSongListTool := openai.Tool{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "get_current_songList",
+			Description: "Get the current song list.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"gid": map[string]interface{}{
+						"type":        "string",
+						"description": "The guild ID where the song should be played",
+					},
+					"cid": map[string]interface{}{
+						"type":        "string",
+						"description": "The channel ID where the song should be played",
+					},
+				},
+				"required": []string{"gid", "cid"},
+			},
+		},
+	}
+
+	return []openai.Tool{timeTool, dateTool, newsTool, searchNewsTool, searchVideoTool, createReminderTool, getRemindersTool, stopSongTool, skipSongTool, playSongTool, removeSongTool, addSongTool, getCurrentSongListTool} // Return a slice of all your tools
 }
 
 func ExecuteToolCall(toolCall openai.ToolCall) (string, error) {
