@@ -29,7 +29,8 @@ jobs:
 
       - name: Test
         run: go test -v ./...
-        env:
+
+        env: 
           test_guild_id: ${{secrets.test_guild_id}}
           test_channel_id: ${{secrets.test_channel_id}}
           api_key: ${{secrets.api_key}}
