@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 	"untitled/internal/bot"
@@ -29,19 +30,19 @@ type Song struct {
 }
 
 // DownloadSong downloads the song from the given URL and saves it to a file. returns the file path to the downloaded song.
-func DownloadSong(url string) (filepath string, err error) {
+func DownloadSong(url string) (filePath string, err error) {
 
 	client := youtube.Client{}
 	video, err := client.GetVideo(url)
 
-	fmt.Println("Video ID: ", video.ID, ", url: ", url)
-
 	if err != nil {
 		return "", fmt.Errorf("error getting video: %w", err)
 	}
+
+	filePath = filepath.Join("./songCache", video.ID+".mp3")
 	// check if song already exists
-	if storage.CheckFileExistence(video.ID + ".mp3") {
-		return video.ID + ".mp3", nil
+	if storage.CheckFileExistence(filePath) {
+		return filePath, nil
 	}
 
 	// Get the best audio format
@@ -62,7 +63,6 @@ func DownloadSong(url string) (filepath string, err error) {
 	}()
 
 	// Save the audio stream to a file
-	filePath := fmt.Sprintf("%s.mp3", video.ID)
 	outFile, err := os.Create(filePath)
 	if err != nil {
 		return "", fmt.Errorf("error creating file: %w", err)
@@ -90,6 +90,12 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot) error {
 	// check if the song list is empty
 	if len(s.Songs) <= 0 {
 		return fmt.Errorf("no songs in the list")
+	}
+
+	// check if the bot is already in a voice channel
+	voiceChats := bot.Session.VoiceConnections
+	if len(voiceChats) > 0 {
+		return errors.New("bot already in a voice channel")
 	}
 
 	currSong := s.Songs[0]
@@ -144,6 +150,11 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot) error {
 					return
 				} else {
 					fmt.Println("No more songs in the list")
+
+					s.Mu.Lock()
+					s.IsPlaying = false
+					s.Mu.Unlock()
+
 					err := vc.Disconnect()
 
 					if err != nil {

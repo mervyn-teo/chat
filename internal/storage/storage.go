@@ -12,7 +12,7 @@ func CheckFileExistence(filePath string) bool {
 		log.Printf("File '%s' does not exist. \n", filePath)
 		return false
 	} else {
-		log.Printf("File '%s' already exists. \n", filePath)
+		log.Printf("File '%s' exists. \n", filePath)
 		return true
 	}
 }
