@@ -301,7 +301,29 @@ func GetAvailableTools() []openai.Tool {
 		},
 	}
 
-	return []openai.Tool{timeTool, dateTool, newsTool, searchNewsTool, searchVideoTool, createReminderTool, getRemindersTool, stopSongTool, skipSongTool, playSongTool, removeSongTool, addSongTool, getCurrentSongListTool} // Return a slice of all your tools
+	findVoiceChannelTool := openai.Tool{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "find_voice_channel",
+			Description: "Find available voice channel for the given gid. It prioritises the voice channel where the user is in.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"gid": map[string]interface{}{
+						"type":        "string",
+						"description": "The guild ID where the song should be played",
+					},
+					"userid": map[string]interface{}{
+						"type":        "string",
+						"description": "The user ID to find the voice channel for",
+					},
+				},
+				"required": []string{"gid", "userid"},
+			},
+		},
+	}
+
+	return []openai.Tool{timeTool, dateTool, newsTool, searchNewsTool, searchVideoTool, createReminderTool, getRemindersTool, stopSongTool, skipSongTool, playSongTool, removeSongTool, addSongTool, getCurrentSongListTool, findVoiceChannelTool} // Return a slice of all your tools
 }
 
 func ExecuteToolCall(toolCall openai.ToolCall) (string, error) {

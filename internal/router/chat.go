@@ -64,6 +64,7 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 
 			if err != nil {
 				log.Printf("Failed to execute tool call %s (%s): %v", toolCall.ID, toolCall.Function.Name, err)
+				fmt.Println("result Str: " + resultString)
 				// The resultString should contain an AI-friendly error message
 			} else {
 				log.Printf("Successfully executed tool call %s (%s)", toolCall.ID, toolCall.Function.Name)
@@ -134,6 +135,9 @@ func runFunctionCall(toolCall openai.ToolCall, myBot *bot.Bot) (string, error) {
 	} else if strings.Contains(toolCall.Function.Name, "song") {
 		log.Printf("Music call detected. ID: %s", toolCall.ID)
 		resultString, err = tools.HandleMusicCall(toolCall, &songMap, myBot)
+	} else if strings.Contains(toolCall.Function.Name, "voice") {
+		log.Printf("Voice channel call detected. ID: %s", toolCall.ID)
+		resultString, err = tools.HandleVoiceChannel(toolCall, myBot)
 	} else {
 		log.Printf("Normal function call detected. ID: %s\n", toolCall.ID)
 		resultString, err = tools.ExecuteToolCall(toolCall)
@@ -141,7 +145,7 @@ func runFunctionCall(toolCall openai.ToolCall, myBot *bot.Bot) (string, error) {
 
 	if err != nil {
 		log.Printf("Error executing function call: %v", err)
-		return "", err
+		return resultString, err
 	}
 
 	return resultString, nil
@@ -198,7 +202,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			userID := userInput.Message.Author.ID
 			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
-			parsedUserMsg = fmt.Sprintf("userID: %s, userName: %s said in channelID %s: %s", userID, userInput.Message.Author.Username, userInput.Message.ChannelID, parsedUserMsg)
+			parsedUserMsg = fmt.Sprintf("userID: %s, userName: %s said in guildID: %s, channelID %s: %s", userID, userInput.Message.Author.Username, userInput.Message.GuildID, userInput.Message.ChannelID, parsedUserMsg)
 
 			if isSkip {
 				continue

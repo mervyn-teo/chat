@@ -28,10 +28,13 @@ type Song struct {
 	Url   string `json:"url"`
 }
 
-func DownloadSong(url string) (string, error) {
+// DownloadSong downloads the song from the given URL and saves it to a file. returns the file path to the downloaded song.
+func DownloadSong(url string) (filepath string, err error) {
 
 	client := youtube.Client{}
 	video, err := client.GetVideo(url)
+
+	fmt.Println("Video ID: ", video.ID, ", url: ", url)
 
 	if err != nil {
 		return "", fmt.Errorf("error getting video: %w", err)
@@ -95,7 +98,7 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot) error {
 		return fmt.Errorf("error downloading song: %w", err)
 	}
 
-	vc, err := bot.JoinVC(gid, cid) // TODO: get the channel ID from the message
+	vc, err := bot.JoinVC(gid, cid)
 
 	if err != nil {
 		return fmt.Errorf("error joining voice channel: %w", err)
