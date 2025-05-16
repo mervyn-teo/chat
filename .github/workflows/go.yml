@@ -28,7 +28,7 @@ jobs:
         run: go build -v ./cmd/api
 
       - name: Test
-        run: go test -v ./...
+        run: go test ./... -coverprofile=coverage.txt
 
         env: 
           test_guild_id: ${{secrets.test_guild_id}}
@@ -40,6 +40,13 @@ jobs:
           test_voice_channel_id: ${{secrets.test_voice_channel_id}}
           test_voice_channel_id_2: ${{secrets.test_voice_channel_id_2}}
           test_voice_channel_id_3: ${{secrets.test_voice_channel_id_3}}
+          
+
+      - name: Upload results to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+        
 
   deploy:
     # Only run this job if the push was to the main branch (not on PRs)
@@ -86,4 +93,3 @@ jobs:
                   cd ${{ secrets.DEPLOY_TARGET_PATH }}
                   ./restart.sh
                   echo "Deployment script executed"
-
