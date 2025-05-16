@@ -221,7 +221,13 @@ func addSong(call openai.ToolCall, s *map[string]map[string]*music.SongList) (st
 		return fmt.Sprintf(`Failed to parse arguments for function '%s': %v`, call.Function.Name, err), fmt.Errorf("argument parsing failed: %w", err)
 	}
 
-	fmt.Printf("gid: %s, cid: %s\n", args.GID, args.CID)
+	if s == nil {
+		fmt.Println("Song map is nil, loading from file")
+		err := music.LoadSongMapFromFile(s)
+		if err != nil {
+			return "", err
+		}
+	}
 
 	innerMap, ok := (*s)[args.GID]
 	if !ok || innerMap == nil {
@@ -230,7 +236,6 @@ func addSong(call openai.ToolCall, s *map[string]map[string]*music.SongList) (st
 		(*s)[args.GID] = innerMap // Assign the new inner map back to the outer map
 	}
 
-	// Now innerMap is guaranteed to be a non-nil map
 	currSongList := innerMap[args.CID]
 
 	if currSongList == nil {
@@ -244,6 +249,12 @@ func addSong(call openai.ToolCall, s *map[string]map[string]*music.SongList) (st
 		log.Printf("Error adding song: %v", err)
 		return fmt.Sprintf(`Failed to add song: %v`, err), fmt.Errorf("failed to add song: %w", err)
 	}
+
+	err = music.SaveSongMapToFile(s)
+	if err != nil {
+		return "", err
+	}
+
 	return fmt.Sprintf(`Song added successfully, song title: %s, url: %s, uuid: %s`, args.Title, args.Url, songAdded.Id), nil
 }
 
@@ -259,8 +270,15 @@ func getCurrentSongList(call openai.ToolCall, s *map[string]map[string]*music.So
 
 	currSongList := (*s)[args.GID][args.CID]
 
+	if currSongList == nil {
+		log.Printf("Song list not found, creating a new one")
+		(*s)[args.GID] = make(map[string]*music.SongList)
+		(*s)[args.GID][args.CID] = music.NewSongList()
+		currSongList = (*s)[args.GID][args.CID]
+	}
+
 	if len(currSongList.Songs) == 0 {
-		return `{"songs": []`, nil
+		return `songs: []`, nil
 	}
 
 	for _, song := range currSongList.Songs {

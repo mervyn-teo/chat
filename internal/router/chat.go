@@ -22,6 +22,9 @@ const (
 )
 
 var reminders reminder.ReminderList
+
+// SongMap is a map of guild IDs to voice channel IDs to song lists
+// Each song list is linked to a specific voice channel
 var songMap map[string]map[string]*music.SongList = make(map[string]map[string]*music.SongList)
 
 func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot *bot.Bot) (string, error) {
@@ -175,6 +178,12 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 		return
 	}
 
+	err = music.LoadSongMapFromFile(&songMap)
+	if err != nil {
+		log.Println("Error loading song map from file:", err)
+		return
+	}
+
 	if messages == nil {
 		log.Println("Router loop: messages map is nil, initializing.")
 		messages = initRouter()
@@ -202,7 +211,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			userID := userInput.Message.Author.ID
 			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
-			parsedUserMsg = fmt.Sprintf("userID: %s, userName: %s said in guildID: %s, channelID %s: %s", userID, userInput.Message.Author.Username, userInput.Message.GuildID, userInput.Message.ChannelID, parsedUserMsg)
+			parsedUserMsg = fmt.Sprintf("userID: %s, userName: %s said in guildID: %s, text channelID %s: %s", userID, userInput.Message.Author.Username, userInput.Message.GuildID, userInput.Message.ChannelID, parsedUserMsg)
 
 			if isSkip {
 				continue

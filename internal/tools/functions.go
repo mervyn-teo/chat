@@ -171,7 +171,7 @@ func GetAvailableTools() []openai.Tool {
 					},
 					"cid": map[string]interface{}{
 						"type":        "string",
-						"description": "The channel ID where the song should be played",
+						"description": "The voice channel ID where the song should be played",
 					},
 				},
 				"required": []string{"gid", "cid"},
@@ -193,7 +193,7 @@ func GetAvailableTools() []openai.Tool {
 					},
 					"cid": map[string]interface{}{
 						"type":        "string",
-						"description": "The channel ID where the song should be played",
+						"description": "The voice channel ID where the song should be played",
 					},
 				},
 				"required": []string{"gid", "cid"},
@@ -215,7 +215,7 @@ func GetAvailableTools() []openai.Tool {
 					},
 					"cid": map[string]interface{}{
 						"type":        "string",
-						"description": "The channel ID where the song should be played",
+						"description": "The voice channel ID where the song should be played",
 					},
 				},
 				"required": []string{"gid", "cid"},
@@ -241,7 +241,7 @@ func GetAvailableTools() []openai.Tool {
 					},
 					"cid": map[string]interface{}{
 						"type":        "string",
-						"description": "The channel ID where the song should be played",
+						"description": "The voice channel ID where the song should be played",
 					},
 				},
 				"required": []string{"gid", "cid", "uuid"},
@@ -271,7 +271,7 @@ func GetAvailableTools() []openai.Tool {
 					},
 					"cid": map[string]interface{}{
 						"type":        "string",
-						"description": "The channel ID where the song should be played",
+						"description": "The voice channel ID where the song should be played",
 					},
 				},
 				"required": []string{"gid", "cid", "title", "url"},
@@ -293,7 +293,7 @@ func GetAvailableTools() []openai.Tool {
 					},
 					"cid": map[string]interface{}{
 						"type":        "string",
-						"description": "The channel ID where the song should be played",
+						"description": "The voice channel ID where the song should be played",
 					},
 				},
 				"required": []string{"gid", "cid"},

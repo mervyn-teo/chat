@@ -56,7 +56,7 @@ func (r *ReminderList) GetReminders() (string, error) {
 		return "No reminders set.", nil
 	}
 
-	marshaled, err := json.Marshal(r.Reminders)
+	marshaled, err := json.MarshalIndent(r.Reminders, "", "  ")
 
 	if err != nil {
 		return "", err
@@ -123,7 +123,7 @@ func LoadRemindersFromFile(r *ReminderList) error {
 			return err
 		}
 		tempReminder := ReminderList{}
-		byteFile, err := json.Marshal(tempReminder)
+		byteFile, err := json.MarshalIndent(tempReminder, "", "  ")
 
 		if err != nil {
 			log.Println("Error marshalling empty reminders:", err)

@@ -17,11 +17,11 @@ import (
 )
 
 type SongList struct {
-	Songs     []Song `json:"songs"`
-	IsPlaying bool   `json:"is_playing"`
-	Mu        sync.Mutex
-	Vc        *discordgo.VoiceConnection
-	StopSig   chan bool
+	Songs     []Song                     `json:"songs"`
+	IsPlaying bool                       `json:"is_playing"`
+	Mu        sync.Mutex                 `json:"-"`
+	Vc        *discordgo.VoiceConnection `json:"-"`
+	StopSig   chan bool                  `json:"-"`
 }
 type Song struct {
 	Title string `json:"title"`
@@ -31,6 +31,10 @@ type Song struct {
 
 // DownloadSong downloads the song from the given URL and saves it to a file. returns the file path to the downloaded song.
 func DownloadSong(url string) (filePath string, err error) {
+	err = os.MkdirAll("./songCache", os.ModePerm)
+	if err != nil {
+		return "", fmt.Errorf("error creating directory: %w", err)
+	}
 
 	client := youtube.Client{}
 	video, err := client.GetVideo(url)
@@ -92,9 +96,9 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot) error {
 		return fmt.Errorf("no songs in the list")
 	}
 
-	// check if the bot is already in a voice channel
+	// check if the bot is already in a voice channel, different from the one we want to join
 	voiceChats := bot.Session.VoiceConnections
-	if len(voiceChats) > 0 {
+	if len(voiceChats) > 0 && voiceChats[gid] == nil {
 		return errors.New("bot already in a voice channel")
 	}
 
