@@ -13,14 +13,13 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"github.com/bwmarrin/discordgo"
 	"io"
+	"layeh.com/gopus"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
-	"sync"
-
-	"github.com/bwmarrin/discordgo"
-	"layeh.com/gopus"
 )
 
 // NOTE: This API is not final and these are likely to change.
@@ -38,18 +37,17 @@ const (
 var (
 	speakers    map[uint32]*gopus.Decoder
 	opusEncoder *gopus.Encoder
-	mu          sync.Mutex
 )
 
 // OnError gets called by dgvoice when an error is encountered.
-// By default logs to STDERR
+// By default, logs to STDERR
 var OnError = func(str string, err error) {
 	prefix := "dgVoice: " + str
 
 	if err != nil {
-		os.Stderr.WriteString(prefix + ": " + err.Error())
+		log.Println(prefix + ": " + err.Error())
 	} else {
-		os.Stderr.WriteString(prefix)
+		log.Println(prefix)
 	}
 }
 
@@ -161,7 +159,12 @@ func PlayAudioFile(v *discordgo.VoiceConnection, filename string, stop <-chan bo
 	}
 
 	// prevent memory leak from residual ffmpeg streams
-	defer run.Process.Kill()
+	defer func(Process *os.Process) {
+		err := Process.Kill()
+		if err != nil {
+
+		}
+	}(run.Process)
 
 	//when stop is sent, kill ffmpeg
 	killswitch := make(chan bool)
