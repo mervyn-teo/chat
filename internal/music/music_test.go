@@ -12,7 +12,7 @@ func TestDownloadSong(t *testing.T) {
 		t.Errorf("Expected song to be downloaded, got nil")
 	}
 
-	if song != "d3J3uJpCgos.mp3" {
+	if song != "songCache\\d3J3uJpCgos.mp3" {
 		t.Errorf("Expected song to be downloaded, got: %s", song)
 	}
 }
