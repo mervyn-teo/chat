@@ -37,6 +37,9 @@ jobs:
           youtube_api_key: ${{secrets.youtube_api_key}}
           news_api_key: ${{secrets.news_api_key}}
           discord_bot_token: ${{secrets.discord_bot_token}}
+          test_voice_channel_id: ${{secrets.test_voice_channel_id}}
+          test_voice_channel_id_2: ${{secrets.test_voice_channel_id_2}}
+          test_voice_channel_id_3: ${{secrets.test_voice_channel_id_3}}
 
   deploy:
     # Only run this job if the push was to the main branch (not on PRs)
