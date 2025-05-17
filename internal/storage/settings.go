@@ -22,7 +22,9 @@ var Setting Settings
 
 func LoadSettings(filePath string) (Settings, error) {
 
-	checkFileExistence(filePath)
+	if !CheckFileExistence(filePath) {
+		setUpSettings(filePath)
+	}
 
 	jsonFile, err := os.Open(filePath)
 	if err != nil {
@@ -60,12 +62,6 @@ func LoadSettings(filePath string) (Settings, error) {
 	}
 
 	return Setting, nil
-}
-
-func checkFileExistence(filepath string) {
-	if _, err := os.Stat(filepath); os.IsNotExist(err) {
-		setUpSettings(filepath)
-	}
 }
 
 func setUpSettings(filepath string) {

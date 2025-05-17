@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"untitled/internal/bot"
+	"untitled/internal/music"
 	"untitled/internal/reminder"
 	"untitled/internal/storage"
 	"untitled/internal/tools"
@@ -16,12 +17,15 @@ import (
 type ChatCompletionMessage = openai.ChatCompletionMessage
 
 const (
-	ChatMessageRoleSystem    = openai.ChatMessageRoleSystem
-	ChatMessageRoleUser      = openai.ChatMessageRoleUser
-	ChatMessageRoleAssistant = openai.ChatMessageRoleAssistant
+	ChatMessageRoleSystem = openai.ChatMessageRoleSystem
+	ChatMessageRoleUser   = openai.ChatMessageRoleUser
 )
 
 var reminders reminder.ReminderList
+
+// SongMap is a map of guild IDs to voice channel IDs to song lists
+// Each song list is linked to a specific voice channel
+var songMap map[string]map[string]*music.SongList = make(map[string]map[string]*music.SongList)
 
 func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot *bot.Bot) (string, error) {
 	availableTools := tools.GetAvailableTools()
@@ -57,21 +61,13 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 		*messages = append(*messages, choice.Message)
 		var toolResponses []openai.ChatCompletionMessage
 
-		var resultString string
-		var err error
-
 		for _, toolCall := range choice.Message.ToolCalls {
 
-			// intersect reminder call
-			if strings.Contains(toolCall.Function.Name, "reminder") {
-				log.Printf("Reminder call detected. ID: %s", toolCall.ID)
-				resultString, err = tools.HandleReminderCall(toolCall, &reminders, myBot)
-			} else {
-				resultString, err = tools.ExecuteToolCall(toolCall)
-			}
+			resultString, err := runFunctionCall(toolCall, myBot)
 
 			if err != nil {
 				log.Printf("Failed to execute tool call %s (%s): %v", toolCall.ID, toolCall.Function.Name, err)
+				fmt.Println("result Str: " + resultString)
 				// The resultString should contain an AI-friendly error message
 			} else {
 				log.Printf("Successfully executed tool call %s (%s)", toolCall.ID, toolCall.Function.Name)
@@ -122,7 +118,40 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 		return finalResp.Choices[0].Message.Content, nil
 	}
 
+	if choice.FinishReason != openai.FinishReasonStop {
+		*messages = append(*messages, resp.Choices[0].Message)
+		return choice.Message.Content, nil
+	}
+
 	return resp.Choices[0].Message.Content, nil
+}
+
+func runFunctionCall(toolCall openai.ToolCall, myBot *bot.Bot) (string, error) {
+	var resultString string
+	var err error
+
+	// Check if the tool call is a function call
+
+	if strings.Contains(toolCall.Function.Name, "reminder") {
+		log.Printf("Reminder call detected. ID: %s", toolCall.ID)
+		resultString, err = tools.HandleReminderCall(toolCall, &reminders, myBot)
+	} else if strings.Contains(toolCall.Function.Name, "song") {
+		log.Printf("Music call detected. ID: %s", toolCall.ID)
+		resultString, err = tools.HandleMusicCall(toolCall, &songMap, myBot)
+	} else if strings.Contains(toolCall.Function.Name, "voice") {
+		log.Printf("Voice channel call detected. ID: %s", toolCall.ID)
+		resultString, err = tools.HandleVoiceChannel(toolCall, myBot)
+	} else {
+		log.Printf("Normal function call detected. ID: %s\n", toolCall.ID)
+		resultString, err = tools.ExecuteToolCall(toolCall)
+	}
+
+	if err != nil {
+		log.Printf("Error executing function call: %v", err)
+		return resultString, err
+	}
+
+	return resultString, nil
 }
 
 func SplitString(s string, chunkSize int) []string {
@@ -146,6 +175,12 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 	err := reminder.LoadRemindersFromFile(&reminders)
 	if err != nil {
 		log.Println("Error loading reminders from file:", err)
+		return
+	}
+
+	err = music.LoadSongMapFromFile(&songMap)
+	if err != nil {
+		log.Println("Error loading song map from file:", err)
 		return
 	}
 
@@ -176,7 +211,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			userID := userInput.Message.Author.ID
 			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
-			parsedUserMsg = fmt.Sprintf("userID: %s, userName: %s said in channelID %s: %s", userID, userInput.Message.Author.Username, userInput.Message.ChannelID, parsedUserMsg)
+			parsedUserMsg = fmt.Sprintf("userID: %s, userName: %s said in guildID: %s, text channelID %s: %s", userID, userInput.Message.Author.Username, userInput.Message.GuildID, userInput.Message.ChannelID, parsedUserMsg)
 
 			if isSkip {
 				continue
@@ -209,10 +244,6 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			messages[userID] = msg
 
-			messages[userID] = append(messages[userID], ChatCompletionMessage{
-				Role:    ChatMessageRoleAssistant,
-				Content: aiResponseContent,
-			})
 			storage.SaveChatHistory(messages, chatFilepath)
 
 			log.Println("Response to user: " + aiResponseContent)
