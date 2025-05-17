@@ -40,3 +40,10 @@ func TestCheckFileExistence(t *testing.T) {
 		t.Errorf("Expected file to not exist, got true")
 	}
 }
+
+func TestWriteToFile(t *testing.T) {
+	err := WriteToFile("testfile.txt", []byte("Hello, World!"))
+	if err != nil {
+		t.Errorf("Failed to write to file: %v", err)
+	}
+}
