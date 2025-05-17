@@ -62,3 +62,14 @@ func TestLoadSongMapFromFile(t *testing.T) {
 		t.Errorf("Channel ID 'test' not found in loaded song map")
 	}
 }
+
+func TestLoadSongMapFromFileNoSongMap(t *testing.T) {
+	if err := os.Remove("songMap.json"); err != nil {
+		t.Errorf("Failed to remove songMap.json: %v", err)
+	}
+
+	err := LoadSongMapFromFile(nil)
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+}
