@@ -1,6 +1,7 @@
 package music
 
 import (
+	"fmt"
 	"github.com/joho/godotenv"
 	"os"
 	"testing"
@@ -14,6 +15,8 @@ func TestDownloadSong(t *testing.T) {
 			t.Errorf("Failed to remove test file: %v", err)
 		}
 	}
+
+	fmt.Println("YOUTUBE_COOKIE: ", os.Getenv("YOUTUBE_COOKIE"))
 
 	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB", os.Getenv("YOUTUBE_COOKIE"))
 	if err != nil {
