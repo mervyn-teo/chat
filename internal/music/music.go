@@ -8,6 +8,7 @@ import (
 	"github.com/kkdai/youtube/v2"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -30,14 +31,28 @@ type Song struct {
 }
 
 // DownloadSong downloads the song from the given URL and saves it to a file. returns the file path to the downloaded song.
-func DownloadSong(url string) (filePath string, err error) {
+func DownloadSong(url string, ytbCookie string) (filePath string, err error) {
 	err = os.MkdirAll("./songCache", os.ModePerm)
 	if err != nil {
 		return "", fmt.Errorf("error creating directory: %w", err)
 	}
 
-	client := youtube.Client{}
-	video, err := client.GetVideo(url)
+	ytbClient := youtube.Client{}
+
+	if ytbCookie == "" {
+		return "", errors.New("no cookies supplied")
+	}
+
+	httpClient := http.Client{}
+	req, err := http.NewRequest("GET", "", nil)
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("Cookie", ytbCookie)
+
+	ytbClient.HTTPClient = &httpClient
+
+	video, err := ytbClient.GetVideo(url)
 
 	if err != nil {
 		return "", fmt.Errorf("error getting video: %w", err)
@@ -52,7 +67,7 @@ func DownloadSong(url string) (filePath string, err error) {
 	// Get the best audio format
 	audioFormat := video.Formats.WithAudioChannels()
 
-	stream, _, err := client.GetStream(video, &audioFormat[0])
+	stream, _, err := ytbClient.GetStream(video, &audioFormat[0])
 	if err != nil {
 		panic(err)
 	}
@@ -90,7 +105,7 @@ func DownloadSong(url string) (filePath string, err error) {
 }
 
 // PlaySong plays the audio file using the voice connection. gid and cid are the guild and channel IDs.
-func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot) error {
+func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot, ytbCookie string) error {
 	// check if the song list is empty
 	if len(s.Songs) <= 0 {
 		return fmt.Errorf("no songs in the list")
@@ -103,7 +118,7 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot) error {
 	}
 
 	currSong := s.Songs[0]
-	filePath, err := DownloadSong(currSong.Url)
+	filePath, err := DownloadSong(currSong.Url, ytbCookie)
 	if err != nil {
 		return fmt.Errorf("error downloading song: %w", err)
 	}
@@ -144,7 +159,7 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot) error {
 
 					// play the next song
 					go func() {
-						err = s.PlaySong(gid, cid, bot)
+						err = s.PlaySong(gid, cid, bot, ytbCookie)
 						if err != nil {
 							fmt.Println("Error playing song:", err)
 						}

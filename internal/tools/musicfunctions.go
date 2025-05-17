@@ -7,6 +7,7 @@ import (
 	"log"
 	"untitled/internal/bot"
 	"untitled/internal/music"
+	"untitled/internal/storage"
 )
 
 type AddSongArgs struct {
@@ -143,7 +144,7 @@ func skipSong(call openai.ToolCall, s *map[string]map[string]*music.SongList, my
 	currSongList.Songs = currSongList.Songs[1:]
 	currSongList.Mu.Unlock()
 
-	err = currSongList.PlaySong(args.GID, args.CID, myBot)
+	err = currSongList.PlaySong(args.GID, args.CID, myBot, storage.Setting.YoutubeCookies)
 
 	if err != nil {
 		log.Printf("Error playing skipped song: %v", err)
@@ -174,7 +175,7 @@ func playSong(call openai.ToolCall, s *map[string]map[string]*music.SongList, my
 		return `Cannot play song while already playing`, fmt.Errorf("cannot play song while already playing")
 	}
 
-	err = currSongList.PlaySong(args.GID, args.CID, myBot)
+	err = currSongList.PlaySong(args.GID, args.CID, myBot, storage.Setting.YoutubeCookies)
 
 	if err != nil {
 		log.Printf("Error playing song: %v", err)

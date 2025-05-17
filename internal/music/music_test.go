@@ -1,20 +1,23 @@
 package music
 
 import (
+	"github.com/joho/godotenv"
 	"os"
 	"testing"
 )
 
 func TestDownloadSong(t *testing.T) {
+	err := godotenv.Load("../../.env")
+
 	if err := os.Remove("songCache\\d3J3uJpCgos.mp3"); err != nil {
 		if !os.IsNotExist(err) {
 			t.Errorf("Failed to remove test file: %v", err)
 		}
 	}
 
-	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB")
+	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB", os.Getenv("YOUTUBE_COOKIE"))
 	if err != nil {
-		return
+		t.Errorf("Expected no error, got: %v", err)
 	}
 
 	if song == "" {
@@ -27,7 +30,7 @@ func TestDownloadSong(t *testing.T) {
 }
 
 func TestDownloadSongError(t *testing.T) {
-	song, err := DownloadSong("https://www.youtube.com/watch?v=")
+	song, err := DownloadSong("https://www.youtube.com/watch?v=", os.Getenv("YOUTUBE_COOKIE"))
 	if err == nil {
 		t.Errorf("Expected error, got nil")
 	}
@@ -38,7 +41,7 @@ func TestDownloadSongError(t *testing.T) {
 }
 
 func TestDownloadSongAlreadyExists(t *testing.T) {
-	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB")
+	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB", os.Getenv("YOUTUBE_COOKIE"))
 	if err != nil {
 		return
 	}

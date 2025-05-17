@@ -16,6 +16,7 @@ type Settings struct {
 	NewsAPIToken        string `json:"news_api_key"`
 	YoutubeToken        string `json:"youtube_api_key"`
 	ChatHistoryFilePath string `json:"chat_history_file_path"`
+	YoutubeCookies      string `json:"youtube_cookies"`
 }
 
 var Setting Settings
