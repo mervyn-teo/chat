@@ -40,6 +40,7 @@ jobs:
           test_voice_channel_id: ${{secrets.test_voice_channel_id}}
           test_voice_channel_id_2: ${{secrets.test_voice_channel_id_2}}
           test_voice_channel_id_3: ${{secrets.test_voice_channel_id_3}}
+          youtube_cookie: ${{secrets.youtube_cookie}}
           
 
       - name: Upload results to Codecov
