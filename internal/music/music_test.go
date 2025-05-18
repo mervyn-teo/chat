@@ -74,7 +74,7 @@ func TestDownloadSong(t *testing.T) {
 
 	fmt.Println("youtube_cookie: ", os.Getenv("youtube_cookie"))
 
-	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB")
+	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos")
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
