@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 	"untitled/internal/bot"
@@ -39,11 +40,7 @@ var (
 )
 
 func getPlatform() string {
-	platform := os.Getenv("PLATFORM")
-	if platform == "" {
-		return "windows"
-	}
-	return platform
+	return runtime.GOOS
 }
 
 // checkYtdlp checks if the platform is Windows and sets the ytdlp variable accordingly.
