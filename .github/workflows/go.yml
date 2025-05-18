@@ -21,32 +21,44 @@ jobs:
           go-version: '1.24'
           cache: true
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.3' # Specify a suitable Python version
+
+      - name: Install yt-dlp
+        run: pip install yt-dlp
+
       - name: Download dependencies
         run: go mod download
+
+      - name: Decode YouTube cookies
+        run: |
+          echo "${{ secrets.YOUTUBE_COOKIE_TXT_BASE64 }}" | base64 --decode > ~/cookies.txt
 
       - name: Build # Build just to ensure it compiles
         run: go build -v ./cmd/api
 
-#      - name: Test
-#        run: go test ./... -coverprofile=coverage.txt
-#
-#        env:
-#          test_guild_id: ${{secrets.test_guild_id}}
-#          test_channel_id: ${{secrets.test_channel_id}}
-#          api_key: ${{secrets.api_key}}
-#          youtube_api_key: ${{secrets.youtube_api_key}}
-#          news_api_key: ${{secrets.news_api_key}}
-#          discord_bot_token: ${{secrets.discord_bot_token}}
-#          test_voice_channel_id: ${{secrets.test_voice_channel_id}}
-#          test_voice_channel_id_2: ${{secrets.test_voice_channel_id_2}}
-#          test_voice_channel_id_3: ${{secrets.test_voice_channel_id_3}}
-#          youtube_cookie: ${{secrets.youtube_cookie}}
-#
-#
-#      - name: Upload results to Codecov
-#        uses: codecov/codecov-action@v5
-#        with:
-#          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Test
+        run: go test ./... -coverprofile=coverage.txt
+
+        env:
+          test_guild_id: ${{secrets.test_guild_id}}
+          test_channel_id: ${{secrets.test_channel_id}}
+          api_key: ${{secrets.api_key}}
+          youtube_api_key: ${{secrets.youtube_api_key}}
+          news_api_key: ${{secrets.news_api_key}}
+          discord_bot_token: ${{secrets.discord_bot_token}}
+          test_voice_channel_id: ${{secrets.test_voice_channel_id}}
+          test_voice_channel_id_2: ${{secrets.test_voice_channel_id_2}}
+          test_voice_channel_id_3: ${{secrets.test_voice_channel_id_3}}
+          youtube_cookie: ${{secrets.youtube_cookie}}
+
+
+      - name: Upload results to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
         
 
   deploy:
