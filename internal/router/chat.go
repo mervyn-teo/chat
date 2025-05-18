@@ -27,6 +27,7 @@ var reminders reminder.ReminderList
 // Each song list is linked to a specific voice channel
 var songMap map[string]map[string]*music.SongList = make(map[string]map[string]*music.SongList)
 
+// SendMessage sends a message to the OpenRouter API and handles tool calls
 func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot *bot.Bot) (string, error) {
 	availableTools := tools.GetAvailableTools()
 	if len(availableTools) < 1 {
@@ -118,7 +119,7 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 		return finalResp.Choices[0].Message.Content, nil
 	}
 
-	if choice.FinishReason != openai.FinishReasonStop {
+	if choice.FinishReason == openai.FinishReasonStop {
 		*messages = append(*messages, resp.Choices[0].Message)
 		return choice.Message.Content, nil
 	}
