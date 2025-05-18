@@ -1,6 +1,7 @@
 package music
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,6 +44,34 @@ func getPlatform() string {
 	return runtime.GOOS
 }
 
+// executeCommand is a synchronous version of exec.Command.Output().
+func executeCommand(cmd *exec.Cmd) (output []byte, err error) {
+	var stdout, stderr bytes.Buffer
+
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Start()
+
+	if err != nil {
+		return nil, fmt.Errorf("error starting yt-dlp: %w", err)
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		return nil, fmt.Errorf("error waiting for yt-dlp: %w", err)
+	}
+
+	output = stdout.Bytes()
+
+	if stderr.Len() > 0 {
+		err = errors.New(stderr.String())
+	} else {
+		err = nil
+	}
+
+	return output, err
+}
+
 // checkYtdlp checks if the platform is Windows and sets the ytdlp variable accordingly.
 func checkYtdlp() {
 	if getPlatform() == "windows" {
@@ -74,7 +103,8 @@ func getVideoInfo(url string) (*videoInfo, error) {
 
 	cmd := exec.Command(ytdlp, "--skip-download", "--dump-json", url)
 
-	output, err := cmd.Output()
+	output, err := executeCommand(cmd)
+
 	if err != nil {
 		return nil, fmt.Errorf("error executing yt-dlp: %w", err)
 	}
@@ -104,7 +134,7 @@ func ytbClientDownload(filepathToStore string, url string) (filePath string, err
 		return "", err
 	}
 
-	_, err = cmd.Output()
+	_, err = executeCommand(cmd)
 	if err != nil {
 		return "", fmt.Errorf("error executing yt-dlp: %w", err)
 	}
