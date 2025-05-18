@@ -1,15 +1,15 @@
 package music
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
 	"github.com/kkdai/youtube/v2"
-	"io"
 	"log"
-	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
@@ -30,6 +30,91 @@ type Song struct {
 	Url   string `json:"url"`
 }
 
+type videoInfo struct {
+	ID string `json:"id"`
+}
+
+var (
+	ytdlp string = "yt-dlp"
+)
+
+func getPlatform() string {
+	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		return "windows"
+	}
+	return platform
+}
+
+// checkYtdlp checks if the platform is Windows and sets the ytdlp variable accordingly.
+func checkYtdlp() {
+	if getPlatform() == "windows" {
+		ytdlp = "yt-dlp.exe"
+	}
+}
+
+func IsYtdlpInstalled() bool {
+	if getPlatform() == "windows" {
+		ytdlp = "yt-dlp.exe"
+	} else {
+		ytdlp = "yt-dlp"
+	}
+
+	_, err := exec.LookPath(ytdlp)
+	if err != nil {
+		log.Printf("yt-dlp not found: %v", err)
+		return false
+	}
+	return true
+}
+
+func getVideoInfo(url string) (*videoInfo, error) {
+	if !IsYtdlpInstalled() {
+		return nil, errors.New("yt-dlp is not installed")
+	}
+
+	checkYtdlp()
+
+	cmd := exec.Command(ytdlp, "--skip-download", "--dump-json", url)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("error executing yt-dlp: %w", err)
+	}
+
+	var video videoInfo
+	err = json.Unmarshal(output, &video)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling video info: %w", err)
+	}
+
+	return &video, nil
+}
+
+func ytbClientDownload(filepathToStore string, url string) (filePath string, err error) {
+	if !IsYtdlpInstalled() {
+		return "", errors.New("yt-dlp is not installed")
+	}
+
+	checkYtdlp()
+
+	outputTemplate := filepath.Join(filepathToStore, "%(id)s.%(ext)s")
+
+	cmd := exec.Command(ytdlp, "-x", "--audio-format", "mp3", "--audio-quality", "0", "-o", outputTemplate, url)
+
+	id, err := youtube.ExtractVideoID(url)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("error executing yt-dlp: %w", err)
+	}
+
+	return filepath.Join(filepathToStore, id+".mp3"), nil
+}
+
 // DownloadSong downloads the song from the given URL and saves it to a file. returns the file path to the downloaded song.
 func DownloadSong(url string, ytbCookie string) (filePath string, err error) {
 	err = os.MkdirAll("./songCache", os.ModePerm)
@@ -37,25 +122,13 @@ func DownloadSong(url string, ytbCookie string) (filePath string, err error) {
 		return "", fmt.Errorf("error creating directory: %w", err)
 	}
 
-	ytbClient := youtube.Client{}
-
-	if ytbCookie == "" {
-		return "", errors.New("no cookies supplied")
+	if !IsYtdlpInstalled() {
+		return "", errors.New("yt-dlp is not installed")
 	}
 
-	httpClient := http.Client{}
-	req, err := http.NewRequest("GET", "", nil)
+	video, err := getVideoInfo(url)
 	if err != nil {
-		return "", fmt.Errorf("error creating request: %w", err)
-	}
-	req.Header.Set("Cookie", ytbCookie)
-
-	ytbClient.HTTPClient = &httpClient
-
-	video, err := ytbClient.GetVideo(url)
-
-	if err != nil {
-		return "", fmt.Errorf("error getting video: %w", err)
+		return "", fmt.Errorf("error getting video info: %w", err)
 	}
 
 	filePath = filepath.Join("./songCache", video.ID+".mp3")
@@ -64,44 +137,17 @@ func DownloadSong(url string, ytbCookie string) (filePath string, err error) {
 		return filePath, nil
 	}
 
-	// Get the best audio format
-	audioFormat := video.Formats.WithAudioChannels()
-
-	stream, _, err := ytbClient.GetStream(video, &audioFormat[0])
+	downloadedFilepath, err := ytbClientDownload("./songCache", url)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
-	defer func() {
-		err := stream.Close()
-		if err != nil {
-			fmt.Printf("Error closing stream: %v", err)
-		} else {
-			fmt.Println("Stream closed successfully")
-		}
-	}()
-
-	// Save the audio stream to a file
-	outFile, err := os.Create(filePath)
-	if err != nil {
-		return "", fmt.Errorf("error creating file: %w", err)
+	if downloadedFilepath == "" {
+		return "", fmt.Errorf("error downloading song: %w", err)
 	}
 
-	defer func() {
-		err := outFile.Close()
-		if err != nil {
-			fmt.Printf("Error closing file: %v", err)
-		} else {
-			fmt.Println("File closed successfully")
-		}
-	}()
-
-	_, err = io.Copy(outFile, stream)
-	if err != nil {
-		return "", fmt.Errorf("error copying stream to file: %w", err)
-	}
 	// Return the file path of the downloaded song
-	return filePath, nil
+	return downloadedFilepath, nil
 }
 
 // PlaySong plays the audio file using the voice connection. gid and cid are the guild and channel IDs.
