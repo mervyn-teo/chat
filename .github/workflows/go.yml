@@ -32,6 +32,10 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Decode YouTube cookies
+        run: |
+          echo "${{ secrets.YOUTUBE_COOKIE_TXT_BASE64 }}" | base64 --decode > ~/cookies.txt
+
       - name: Build # Build just to ensure it compiles
         run: go build -v ./cmd/api
 

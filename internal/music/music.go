@@ -81,11 +81,7 @@ func checkYtdlp() {
 }
 
 func IsYtdlpInstalled() bool {
-	if getPlatform() == "windows" {
-		ytdlp = "yt-dlp.exe"
-	} else {
-		ytdlp = "yt-dlp"
-	}
+	checkYtdlp()
 
 	_, err := exec.LookPath(ytdlp)
 	if err != nil {
@@ -102,7 +98,7 @@ func getVideoInfo(url string) (*videoInfo, error) {
 
 	checkYtdlp()
 
-	cmd := exec.Command(ytdlp, "--skip-download", "--dump-json", url)
+	cmd := exec.Command(ytdlp, "--skip-download", "--dump-json", "--cookies", "~/cookies.txt", url)
 
 	output, err := executeCommand(cmd)
 
@@ -128,7 +124,7 @@ func ytbClientDownload(filepathToStore string, url string) (filePath string, err
 
 	outputTemplate := filepath.Join(filepathToStore, "%(id)s.%(ext)s")
 
-	cmd := exec.Command(ytdlp, "-x", "--audio-format", "mp3", "--audio-quality", "0", "-o", outputTemplate, url)
+	cmd := exec.Command(ytdlp, "-x", "--audio-format", "mp3", "--audio-quality", "0", "-o", outputTemplate, "--cookies", "~/cookies.txt", url)
 
 	id, err := youtube.ExtractVideoID(url)
 	if err != nil {
@@ -144,7 +140,7 @@ func ytbClientDownload(filepathToStore string, url string) (filePath string, err
 }
 
 // DownloadSong downloads the song from the given URL and saves it to a file. returns the file path to the downloaded song.
-func DownloadSong(url string, ytbCookie string) (filePath string, err error) {
+func DownloadSong(url string) (filePath string, err error) {
 	err = os.MkdirAll("./songCache", os.ModePerm)
 	if err != nil {
 		return "", fmt.Errorf("error creating directory: %w", err)
@@ -192,7 +188,7 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot, ytbCookie stri
 	}
 
 	currSong := s.Songs[0]
-	filePath, err := DownloadSong(currSong.Url, ytbCookie)
+	filePath, err := DownloadSong(currSong.Url)
 	if err != nil {
 		return fmt.Errorf("error downloading song: %w", err)
 	}
