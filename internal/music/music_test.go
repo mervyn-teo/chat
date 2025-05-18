@@ -74,7 +74,7 @@ func TestDownloadSong(t *testing.T) {
 
 	fmt.Println("youtube_cookie: ", os.Getenv("youtube_cookie"))
 
-	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB", os.Getenv("youtube_cookie"))
+	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB")
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestDownloadSong(t *testing.T) {
 }
 
 func TestDownloadSongError(t *testing.T) {
-	song, err := DownloadSong("https://www.youtube.com/watch?v=", os.Getenv("youtube_cookie"))
+	song, err := DownloadSong("https://www.youtube.com/watch?v=")
 	if err == nil {
 		t.Errorf("Expected error, got nil")
 	}
@@ -96,7 +96,7 @@ func TestDownloadSongError(t *testing.T) {
 }
 
 func TestDownloadSongAlreadyExists(t *testing.T) {
-	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB", os.Getenv("youtube_cookie"))
+	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB")
 	if err != nil {
 		return
 	}
