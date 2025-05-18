@@ -58,6 +58,7 @@ func executeCommand(cmd *exec.Cmd) (output []byte, err error) {
 
 	err = cmd.Wait()
 	if err != nil {
+		fmt.Println("error log: ", stderr.String())
 		return nil, fmt.Errorf("error waiting for yt-dlp: %w", err)
 	}
 
