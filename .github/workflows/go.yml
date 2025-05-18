@@ -21,6 +21,14 @@ jobs:
           go-version: '1.24'
           cache: true
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.3' # Specify a suitable Python version
+
+      - name: Install yt-dlp
+        run: pip install yt-dlp
+
       - name: Download dependencies
         run: go mod download
 
