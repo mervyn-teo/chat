@@ -34,7 +34,12 @@ jobs:
 
       - name: Decode YouTube cookies
         run: |
-          echo "${{ secrets.YOUTUBE_COOKIE_TXT_BASE64 }}" | base64 --decode > ~/cookies.txt
+          echo "${{ secrets.YOUTUBE_COOKIE_TXT_BASE64 }}" | base64 --decode > cookies.txt
+
+      - name: Set up ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
       - name: Build # Build just to ensure it compiles
         run: go build -v ./cmd/api
