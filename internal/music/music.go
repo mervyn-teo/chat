@@ -261,6 +261,7 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot, ytbCookie stri
 					fmt.Println("No more songs in the list")
 
 					s.Mu.Lock()
+					s.Songs = []Song{} // clear the song list
 					s.IsPlaying = false
 					s.Mu.Unlock()
 
