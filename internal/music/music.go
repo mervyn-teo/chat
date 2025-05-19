@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 	"untitled/internal/bot"
@@ -141,6 +142,9 @@ func ytbClientDownload(filepathToStore string, url string) (filePath string, err
 	outputTemplate := filepath.Join(filepathToStore, "%(id)s.%(ext)s")
 
 	cmd := exec.Command(ytdlp, "-x", "--audio-format", "mp3", "--audio-quality", "0", "-o", outputTemplate, "--cookies", cookiesPath, url)
+
+	cmdStr := fmt.Sprintf("%s %s", ytdlp, strings.Join(cmd.Args, " "))
+	log.Printf("Executing command: %s", cmdStr)
 
 	id, err := youtube.ExtractVideoID(url)
 	if err != nil {
