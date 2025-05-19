@@ -36,6 +36,7 @@ jobs:
         run: |
           echo "${{ secrets.YOUTUBE_COOKIE_TXT_BASE64 }}" | base64 --decode > cookies.txt
           ls -la cookies.txt
+          chmod 644 cookies.txt
           head -n 2 cookies.txt  # Show just the first two lines to avoid leaking sensitive data
 
       - name: Set up ffmpeg
