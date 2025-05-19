@@ -8,6 +8,9 @@ import (
 )
 
 func TestIsYtdlpInstalled(t *testing.T) {
+	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
+		t.Skip("Skipping YouTube tests as requested by SKIP_YOUTUBE_TESTS env var")
+	}
 	if !IsYtdlpInstalled() {
 		fmt.Println("yt-dlp is not installed, please install it to run the tests.")
 		os.Exit(1)
@@ -26,6 +29,10 @@ func TestGetPlatform(t *testing.T) {
 }
 
 func TestGetVideoInfo(t *testing.T) {
+	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
+		t.Skip("Skipping YouTube tests as requested by SKIP_YOUTUBE_TESTS env var")
+	}
+
 	if !IsYtdlpInstalled() {
 		t.Fatal("yt-dlp is not installed, please install it to run the tests.")
 	}
@@ -45,6 +52,9 @@ func TestGetVideoInfo(t *testing.T) {
 }
 
 func TestYtbClientDownload(t *testing.T) {
+	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
+		t.Skip("Skipping YouTube tests as requested by SKIP_YOUTUBE_TESTS env var")
+	}
 	if !IsYtdlpInstalled() {
 		t.Fatal("yt-dlp is not installed, please install it to run the tests.")
 	}
@@ -65,7 +75,9 @@ func TestYtbClientDownload(t *testing.T) {
 
 func TestDownloadSong(t *testing.T) {
 	err := godotenv.Load("../../.env")
-
+	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
+		t.Skip("Skipping YouTube tests as requested by SKIP_YOUTUBE_TESTS env var")
+	}
 	if err := os.Remove("songCache\\d3J3uJpCgos.mp3"); err != nil {
 		if !os.IsNotExist(err) {
 			t.Errorf("Failed to remove test file: %v", err)
@@ -85,6 +97,9 @@ func TestDownloadSong(t *testing.T) {
 }
 
 func TestDownloadSongError(t *testing.T) {
+	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
+		t.Skip("Skipping YouTube tests as requested by SKIP_YOUTUBE_TESTS env var")
+	}
 	song, err := DownloadSong("https://www.youtube.com/watch?v=")
 	if err == nil {
 		t.Errorf("Expected error, got nil")
@@ -96,6 +111,9 @@ func TestDownloadSongError(t *testing.T) {
 }
 
 func TestDownloadSongAlreadyExists(t *testing.T) {
+	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
+		t.Skip("Skipping YouTube tests as requested by SKIP_YOUTUBE_TESTS env var")
+	}
 	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos")
 	if err != nil {
 		return

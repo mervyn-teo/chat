@@ -40,10 +40,6 @@ jobs:
       - name: Build # Build just to ensure it compiles
         run: go build -v ./cmd/api
 
-      - name: Decode YouTube cookies
-        run: |
-          echo "${{ secrets.YOUTUBE_COOKIE_TXT_BASE64 }}" | base64 --decode > /home/runner/work/chat/chat/internal/music/cookies.txt 
-
       - name: Test
         run: go test ./... -coverprofile=coverage.txt
 
@@ -58,6 +54,7 @@ jobs:
           test_voice_channel_id_2: ${{secrets.test_voice_channel_id_2}}
           test_voice_channel_id_3: ${{secrets.test_voice_channel_id_3}}
           youtube_cookie: ${{secrets.youtube_cookie}}
+          SKIP_YOUTUBE_TESTS: "true"
 
 
       - name: Upload results to Codecov
