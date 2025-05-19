@@ -98,7 +98,7 @@ func getVideoInfo(url string) (*videoInfo, error) {
 
 	checkYtdlp()
 
-	cmd := exec.Command(ytdlp, "--skip-download", "--dump-json", "--cookies", "./cookies.txt", url)
+	cmd := exec.Command(ytdlp, "--skip-download", "--dump-json", "--cookies", "cookies.txt", url)
 
 	output, err := executeCommand(cmd)
 
@@ -124,7 +124,7 @@ func ytbClientDownload(filepathToStore string, url string) (filePath string, err
 
 	outputTemplate := filepath.Join(filepathToStore, "%(id)s.%(ext)s")
 
-	cmd := exec.Command(ytdlp, "-x", "--audio-format", "mp3", "--audio-quality", "0", "-o", outputTemplate, "--cookies", "./cookies.txt", url)
+	cmd := exec.Command(ytdlp, "-x", "--audio-format", "mp3", "--audio-quality", "0", "-o", outputTemplate, "--cookies", "cookies.txt", url)
 
 	id, err := youtube.ExtractVideoID(url)
 	if err != nil {

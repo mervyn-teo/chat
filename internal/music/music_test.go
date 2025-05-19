@@ -96,7 +96,7 @@ func TestDownloadSongError(t *testing.T) {
 }
 
 func TestDownloadSongAlreadyExists(t *testing.T) {
-	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos&list=PLwCTYY94JxbZHrJ-anoUuFkNHSFQqe438&index=6&pp=gAQBiAQB8AUB")
+	song, err := DownloadSong("https://www.youtube.com/watch?v=d3J3uJpCgos")
 	if err != nil {
 		return
 	}
