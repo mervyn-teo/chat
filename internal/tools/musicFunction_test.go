@@ -100,6 +100,9 @@ func mockSonglist() {
 }
 
 func TestPlayMusic(t *testing.T) {
+	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
+		t.Skip("Skipping YouTube tests as requested by SKIP_YOUTUBE_TESTS env var")
+	}
 	mockSonglist()
 	call := openai.ToolCall{
 		Function: openai.FunctionCall{
@@ -181,6 +184,9 @@ Song: Song 4, ID: 02Q4yUMw3Ds, URL: https://www.youtube.com/watch?v=02Q4yUMw3Ds&
 }
 
 func TestSkipSongWhilePlaying(t *testing.T) {
+	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
+		t.Skip("Skipping YouTube tests as requested by SKIP_YOUTUBE_TESTS env var")
+	}
 	mockSonglist()
 	call := openai.ToolCall{
 		Function: openai.FunctionCall{
@@ -207,6 +213,9 @@ func TestSkipSongWhilePlaying(t *testing.T) {
 }
 
 func TestPauseSong(t *testing.T) {
+	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
+		t.Skip("Skipping YouTube tests as requested by SKIP_YOUTUBE_TESTS env var")
+	}
 	mockSonglist()
 	call := openai.ToolCall{
 		Function: openai.FunctionCall{
@@ -228,6 +237,9 @@ func TestPauseSong(t *testing.T) {
 }
 
 func TestStopSong(t *testing.T) {
+	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
+		t.Skip("Skipping YouTube tests as requested by SKIP_YOUTUBE_TESTS env var")
+	}
 	mockSonglist()
 	call := openai.ToolCall{
 		Function: openai.FunctionCall{

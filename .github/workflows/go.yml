@@ -26,16 +26,8 @@ jobs:
         with:
           python-version: '3.13.3' # Specify a suitable Python version
 
-      - name: Install yt-dlp
-        run: pip install yt-dlp
-
       - name: Download dependencies
         run: go mod download
-
-      - name: Set up ffmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
 
       - name: Build # Build just to ensure it compiles
         run: go build -v ./cmd/api
