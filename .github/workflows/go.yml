@@ -32,13 +32,6 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Decode YouTube cookies
-        run: |
-          echo "${{ secrets.YOUTUBE_COOKIE_TXT_BASE64 }}" | base64 --decode > /home/runner/work/chat/chat/internal/music/cookies.txt 
-          ls -la cookies.txt
-          chmod 644 cookies.txt
-          head -n 2 cookies.txt  # Show just the first two lines to avoid leaking sensitive data
-
       - name: Set up ffmpeg
         run: |
           sudo apt-get update
@@ -46,6 +39,13 @@ jobs:
 
       - name: Build # Build just to ensure it compiles
         run: go build -v ./cmd/api
+
+      - name: Decode YouTube cookies
+        run: |
+          echo "${{ secrets.YOUTUBE_COOKIE_TXT_BASE64 }}" | base64 --decode > /home/runner/work/chat/chat/internal/music/cookies.txt 
+          ls -la cookies.txt
+          chmod 644 cookies.txt
+          head -n 2 cookies.txt  # Show just the first two lines to avoid leaking sensitive data
 
       - name: Test
         run: go test ./... -coverprofile=coverage.txt
