@@ -92,13 +92,21 @@ func IsYtdlpInstalled() bool {
 }
 
 func getVideoInfo(url string) (*videoInfo, error) {
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	// Use absolute path to cookies file
+	cookiesPath := filepath.Join(cwd, "cookies.txt")
 	if !IsYtdlpInstalled() {
 		return nil, errors.New("yt-dlp is not installed")
 	}
 
 	checkYtdlp()
 
-	cmd := exec.Command(ytdlp, "--skip-download", "--dump-json", "--cookies", "cookies.txt", url)
+	cmd := exec.Command(ytdlp, "--skip-download", "--dump-json", "--cookies", cookiesPath, url)
 
 	output, err := executeCommand(cmd)
 
@@ -116,6 +124,14 @@ func getVideoInfo(url string) (*videoInfo, error) {
 }
 
 func ytbClientDownload(filepathToStore string, url string) (filePath string, err error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	// Use absolute path to cookies file
+	cookiesPath := filepath.Join(cwd, "cookies.txt")
+
 	if !IsYtdlpInstalled() {
 		return "", errors.New("yt-dlp is not installed")
 	}
@@ -124,7 +140,7 @@ func ytbClientDownload(filepathToStore string, url string) (filePath string, err
 
 	outputTemplate := filepath.Join(filepathToStore, "%(id)s.%(ext)s")
 
-	cmd := exec.Command(ytdlp, "-x", "--audio-format", "mp3", "--audio-quality", "0", "-o", outputTemplate, "--cookies", "cookies.txt", url)
+	cmd := exec.Command(ytdlp, "-x", "--audio-format", "mp3", "--audio-quality", "0", "-o", outputTemplate, "--cookies", cookiesPath, url)
 
 	id, err := youtube.ExtractVideoID(url)
 	if err != nil {
