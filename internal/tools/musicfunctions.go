@@ -210,6 +210,10 @@ func removeSong(call openai.ToolCall, s *map[string]map[string]*music.SongList) 
 		log.Printf("Error removing song: %v", err)
 		return fmt.Sprintf(`Failed to remove song: %v`, err), fmt.Errorf("failed to remove song: %w", err)
 	}
+	err = music.SaveSongMapToFile(s)
+	if err != nil {
+		return "", err
+	}
 
 	return fmt.Sprintf(`Song removed successfully, song title: "%s, song url: %s`, args.UUID, args.UUID), nil
 }
@@ -222,7 +226,7 @@ func addSong(call openai.ToolCall, s *map[string]map[string]*music.SongList) (st
 		return fmt.Sprintf(`Failed to parse arguments for function '%s': %v`, call.Function.Name, err), fmt.Errorf("argument parsing failed: %w", err)
 	}
 
-	if s == nil {
+	if *s == nil {
 		fmt.Println("Song map is nil, loading from file")
 		err := music.LoadSongMapFromFile(s)
 		if err != nil {

@@ -69,7 +69,6 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 			if err != nil {
 				log.Printf("Failed to execute tool call %s (%s): %v", toolCall.ID, toolCall.Function.Name, err)
 				fmt.Println("result Str: " + resultString)
-				// The resultString should contain an AI-friendly error message
 			} else {
 				log.Printf("Successfully executed tool call %s (%s)", toolCall.ID, toolCall.Function.Name)
 			}
@@ -245,6 +244,15 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			messages[userID] = msg
 
+			// Trim messages
+			trimmed := trimMsg(messages[userID], 20)
+
+			if trimmed != nil {
+				messages[userID] = trimmed
+			} else {
+				log.Println("No messages to trim.")
+			}
+
 			storage.SaveChatHistory(messages, chatFilepath)
 
 			log.Println("Response to user: " + aiResponseContent)
@@ -259,6 +267,23 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 		}
 	}
+}
+
+// Trim messages to a maximum length, only keeping the last maxMsg number of user messages
+func trimMsg(messages []ChatCompletionMessage, maxMsg int) []ChatCompletionMessage {
+	var temp []ChatCompletionMessage
+	i := 0
+	for i < maxMsg {
+		temp = append(temp, messages[i])
+		if i >= len(messages) {
+			return nil
+		}
+
+		if messages[i].Role == ChatMessageRoleUser {
+			i++
+		}
+	}
+	return temp
 }
 
 func parseUserInput(userInput string) (parsed string, skip bool) {

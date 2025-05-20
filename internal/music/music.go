@@ -195,16 +195,10 @@ func DownloadSong(url string) (filePath string, err error) {
 }
 
 // PlaySong plays the audio file using the voice connection. gid and cid are the guild and channel IDs.
-func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot, ytbCookie string) error {
+func (s *SongList) PlaySong(gid string, cid string, myBot *bot.Bot, ytbCookie string) error {
 	// check if the song list is empty
 	if len(s.Songs) <= 0 {
 		return fmt.Errorf("no songs in the list")
-	}
-
-	// check if the bot is already in a voice channel, different from the one we want to join
-	voiceChats := bot.Session.VoiceConnections
-	if len(voiceChats) > 0 && voiceChats[gid] == nil {
-		return errors.New("bot already in a voice channel")
 	}
 
 	currSong := s.Songs[0]
@@ -213,7 +207,7 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot, ytbCookie stri
 		return fmt.Errorf("error downloading song: %w", err)
 	}
 
-	vc, err := bot.JoinVC(gid, cid)
+	vc, err := myBot.JoinVC(gid, cid)
 
 	if err != nil {
 		return fmt.Errorf("error joining voice channel: %w", err)
@@ -249,7 +243,7 @@ func (s *SongList) PlaySong(gid string, cid string, bot *bot.Bot, ytbCookie stri
 
 					// play the next song
 					go func() {
-						err = s.PlaySong(gid, cid, bot, ytbCookie)
+						err = s.PlaySong(gid, cid, myBot, ytbCookie)
 						if err != nil {
 							fmt.Println("Error playing song:", err)
 						}
@@ -305,6 +299,7 @@ func (s *SongList) RemoveSong(uuid string) error {
 	for i, song := range s.Songs {
 		if song.Id == uuid {
 			s.Songs = append(s.Songs[:i], s.Songs[i+1:]...)
+			s.Mu.Unlock()
 			return nil
 		}
 	}
