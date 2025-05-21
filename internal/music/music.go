@@ -196,83 +196,119 @@ func DownloadSong(url string) (filePath string, err error) {
 
 // PlaySong plays the audio file using the voice connection. gid and cid are the guild and channel IDs.
 func (s *SongList) PlaySong(gid string, cid string, myBot *bot.Bot, ytbCookie string) error {
-	// check if the song list is empty
+	// Check if the song list is empty
 	if len(s.Songs) <= 0 {
 		return fmt.Errorf("no songs in the list")
 	}
 
+	// Check if the bot is already in this guild
+	for _, vc := range myBot.Session.VoiceConnections {
+		if vc.GuildID == gid && s.IsPlaying {
+			return fmt.Errorf("play song failed, already in a voice channel in this guild")
+		}
+	}
+
+	// Download the current song
 	currSong := s.Songs[0]
 	filePath, err := DownloadSong(currSong.Url)
 	if err != nil {
 		return fmt.Errorf("error downloading song: %w", err)
 	}
 
+	// Join the voice channel
 	vc, err := myBot.JoinVC(gid, cid)
-
 	if err != nil {
 		return fmt.Errorf("error joining voice channel: %w", err)
 	}
 
+	// Set up channels for playback control
 	donePlaying := make(chan bool)
 	stopper := make(chan bool)
-	go PlayAudioFile(vc, filePath, stopper, donePlaying)
 
+	// Update SongList state
 	s.Mu.Lock()
 	s.Vc = vc
 	s.IsPlaying = true
 	s.Mu.Unlock()
 
-	go func() {
-		for {
-			select {
-			case <-s.StopSig:
-				stopper <- true
-				fmt.Println("Stopping song")
-				return
-			case <-donePlaying:
-				fmt.Println("Finished playing audio")
+	// Start playing the audio file
+	go PlayAudioFile(vc, filePath, stopper, donePlaying)
 
-				// check if the song list is empty
-				if len(s.Songs) > 1 {
-					// remove the first song from the list
-					s.Songs = s.Songs[1:]
-
-					// play the next song in the list
-					nextSong := s.Songs[0]
-					fmt.Println("Playing next song:", nextSong)
-
-					// play the next song
-					go func() {
-						err = s.PlaySong(gid, cid, myBot, ytbCookie)
-						if err != nil {
-							fmt.Println("Error playing song:", err)
-						}
-						return
-					}()
-
-					return
-				} else {
-					fmt.Println("No more songs in the list")
-
-					s.Mu.Lock()
-					s.Songs = []Song{} // clear the song list
-					s.IsPlaying = false
-					s.Mu.Unlock()
-
-					err := vc.Disconnect()
-
-					if err != nil {
-						fmt.Println("Error disconnecting:", err)
-					}
-					return
-				}
-			default:
-				time.Sleep(5 * time.Second)
-			}
-		}
-	}()
+	// Monitor playback
+	go s.monitorPlayback(gid, cid, myBot, ytbCookie, vc, stopper, donePlaying)
 
 	return nil
+}
+
+// monitorPlayback handles the song completion and queue management
+func (s *SongList) monitorPlayback(
+	gid, cid string,
+	myBot *bot.Bot,
+	ytbCookie string,
+	vc *discordgo.VoiceConnection,
+	stopper, donePlaying chan bool,
+) {
+	for {
+		select {
+		case <-s.StopSig:
+			stopper <- true
+			fmt.Println("Stopping song")
+			return
+
+		case <-donePlaying:
+			fmt.Println("Finished playing audio")
+
+			if s.handleSongCompletion(gid, cid, myBot, ytbCookie, vc) {
+				return
+			}
+
+		default:
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+// handleSongCompletion processes the next song or cleans up if queue is empty
+// Returns true if monitoring should stop, false to continue
+func (s *SongList) handleSongCompletion(
+	gid, cid string,
+	myBot *bot.Bot,
+	ytbCookie string,
+	vc *discordgo.VoiceConnection,
+) bool {
+	// Check if there are more songs in the queue
+	if len(s.Songs) > 1 {
+		// Remove the first song and play the next one
+		s.Mu.Lock()
+		s.Songs = s.Songs[1:]
+		nextSong := s.Songs[0]
+		s.IsPlaying = false
+		s.Mu.Unlock()
+
+		fmt.Println("Playing next song:", nextSong)
+
+		go func() {
+			if err := s.PlaySong(gid, cid, myBot, ytbCookie); err != nil {
+				fmt.Println("Error playing song:", err)
+			}
+		}()
+
+		return true
+	}
+
+	// No more songs, clean up
+	fmt.Println("No more songs in the list")
+
+	s.Mu.Lock()
+	s.Songs = []Song{} // clear the song list
+	s.IsPlaying = false
+	s.Mu.Unlock()
+
+	if err := vc.Disconnect(); err != nil {
+		fmt.Println("Error disconnecting:", err)
+	}
+
+	return true
 }
 
 func (s *SongList) AddSong(title string, url string) (*Song, error) {
