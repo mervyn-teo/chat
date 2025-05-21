@@ -69,7 +69,6 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 			if err != nil {
 				log.Printf("Failed to execute tool call %s (%s): %v", toolCall.ID, toolCall.Function.Name, err)
 				fmt.Println("result Str: " + resultString)
-				// The resultString should contain an AI-friendly error message
 			} else {
 				log.Printf("Successfully executed tool call %s (%s)", toolCall.ID, toolCall.Function.Name)
 			}
@@ -245,6 +244,15 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			messages[userID] = msg
 
+			// Trim messages
+			trimmed := trimMsg(messages[userID], 20)
+
+			if trimmed != nil {
+				messages[userID] = trimmed
+			} else {
+				log.Println("No messages to trim.")
+			}
+
 			storage.SaveChatHistory(messages, chatFilepath)
 
 			log.Println("Response to user: " + aiResponseContent)
@@ -259,6 +267,42 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 		}
 	}
+}
+
+// Trim messages to a maximum length, only keeping the last maxMsg number of user messages
+func trimMsg(messages []ChatCompletionMessage, maxMsg int) []ChatCompletionMessage {
+	log.Printf("Trimming messages to a maximum of %d\n", maxMsg)
+	var temp []ChatCompletionMessage
+	i := 0
+	userMsgCount := 0
+	fmt.Println("messages length: ", len(messages))
+	for {
+		if i >= len(messages) {
+			fmt.Println("userMsgCount: ", userMsgCount)
+			return nil
+		}
+
+		temp = append(temp, messages[len(messages)-1-i])
+
+		if userMsgCount >= maxMsg {
+			log.Println("Reached maximum number of user messages to keep.")
+			break
+		}
+
+		if messages[len(messages)-1-i].Role == ChatMessageRoleUser {
+			userMsgCount++
+		}
+		i++
+	}
+
+	// Add the system message at the end
+	temp = append(temp, messages[0])
+
+	// Reverse the order of messages
+	for j := 0; j < len(temp)/2; j++ {
+		temp[j], temp[len(temp)-1-j] = temp[len(temp)-1-j], temp[j]
+	}
+	return temp
 }
 
 func parseUserInput(userInput string) (parsed string, skip bool) {

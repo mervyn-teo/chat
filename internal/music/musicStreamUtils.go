@@ -34,11 +34,6 @@ const (
 	maxBytes      = (frameSize * 2) * 2 // max size of opus data
 )
 
-var (
-	speakers    map[uint32]*gopus.Decoder
-	opusEncoder *gopus.Encoder
-)
-
 // OnError gets called by dgvoice when an error is encountered.
 // By default, logs to STDERR
 var OnError = func(str string, err error) {
@@ -60,7 +55,7 @@ func SendPCM(v *discordgo.VoiceConnection, pcm <-chan []int16) {
 
 	var err error
 
-	opusEncoder, err = gopus.NewEncoder(frameRate, channels, gopus.Audio)
+	opusEncoder, err := gopus.NewEncoder(frameRate, channels, gopus.Audio)
 
 	if err != nil {
 		OnError("NewEncoder Error", err)
@@ -100,6 +95,7 @@ func ReceivePCM(v *discordgo.VoiceConnection, c chan *discordgo.Packet) {
 		return
 	}
 
+	var speakers map[uint32]*gopus.Decoder
 	var err error
 
 	for {
@@ -142,14 +138,25 @@ func ReceivePCM(v *discordgo.VoiceConnection, c chan *discordgo.Packet) {
 func PlayAudioFile(v *discordgo.VoiceConnection, filename string, stop <-chan bool, donePlaying chan<- bool) {
 
 	// Create a shell command "object" to run.
-	run := exec.Command("ffmpeg", "-i", filename, "-f", "s16le", "-ar", strconv.Itoa(frameRate), "-ac", strconv.Itoa(channels), "pipe:1")
+	run := exec.Command("ffmpeg",
+		"-i", filename,
+		"-f", "s16le",
+		"-ar", strconv.Itoa(frameRate),
+		"-ac", strconv.Itoa(channels),
+		"-loglevel", "error", // Reduce logging overhead
+		"-threads", "2", // Limit thread usage per process
+		"-quality", "good", // Use faster quality settings
+		"-probesize", "500000", // Use smaller probe size
+		"-analyzeduration", "0", // Reduce analysis time
+		"pipe:1")
+
 	ffmpegout, err := run.StdoutPipe()
 	if err != nil {
 		OnError("StdoutPipe Error", err)
 		return
 	}
 
-	ffmpegbuf := bufio.NewReaderSize(ffmpegout, 16384)
+	ffmpegbuf := bufio.NewReaderSize(ffmpegout, 32768)
 
 	// Starts the ffmpeg command
 	err = run.Start()
@@ -189,7 +196,7 @@ func PlayAudioFile(v *discordgo.VoiceConnection, filename string, stop <-chan bo
 		}
 	}()
 
-	send := make(chan []int16, 2)
+	send := make(chan []int16, 10)
 	defer close(send)
 
 	isClose := make(chan bool)
@@ -199,8 +206,11 @@ func PlayAudioFile(v *discordgo.VoiceConnection, filename string, stop <-chan bo
 	}()
 
 	for {
-		// read data from ffmpeg stdout
+		// Create a new buffer each time and explicitly zero it out
 		audiobuf := make([]int16, frameSize*channels)
+		for i := range audiobuf {
+			audiobuf[i] = 0
+		}
 		err = binary.Read(ffmpegbuf, binary.LittleEndian, &audiobuf)
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			donePlaying <- true
