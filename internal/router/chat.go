@@ -254,14 +254,17 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				currentMessages = setInitialMessages(instructions, userID)
 			}
 
-			messages[userID] = append(currentMessages, ChatCompletionMessage{
+			updatedMessages := make([]ChatCompletionMessage, len(currentMessages))
+			copy(updatedMessages, currentMessages)
+
+			updatedMessages = append(updatedMessages, ChatCompletionMessage{
 				Role:    ChatMessageRoleUser,
 				Content: parsedUserMsg,
 			})
+
 			storage.SaveChatHistory(messages, chatFilepath)
 
-			msg := messages[userID]
-			aiResponseContent, err := SendMessage(client, &msg, Mybot)
+			aiResponseContent, err := SendMessage(client, &updatedMessages, Mybot)
 
 			if err != nil {
 				log.Printf("Error getting response from OpenRouter: %v", err)
@@ -270,7 +273,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				}
 			}
 
-			messages[userID] = msg
+			messages[userID] = updatedMessages
 
 			// Trim messages
 			trimmed := trimMsg(messages[userID], MaxMessagesToKeep)
