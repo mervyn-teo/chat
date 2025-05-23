@@ -235,10 +235,8 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			if err != nil {
 				log.Printf("Error getting response from OpenRouter: %v", err)
-				if len(messages) > 0 {
-					// Remove the last message if there's an error
-					messages[userID] = currentMessages[:len(messages)-1]
-					aiResponseContent = "There was an error processing your request. Please try again."
+				if len(messages[userID]) > 0 {
+					messages[userID] = messages[userID][:len(messages[userID])-1]
 				}
 			}
 
