@@ -37,6 +37,10 @@ var (
 
 // SendMessage sends a message to the OpenRouter API and handles tool calls
 func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot *bot.Bot) (string, error) {
+	if client == nil || messages == nil || myBot == nil {
+		return "", fmt.Errorf("invalid parameters: client, messages, or bot is nil")
+	}
+
 	availableTools := tools.GetAvailableTools()
 	if len(availableTools) < 1 {
 		log.Println("Warning: No tools available for the model to use.")
