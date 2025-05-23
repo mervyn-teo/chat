@@ -21,8 +21,9 @@ const (
 	ChatMessageRoleSystem = openai.ChatMessageRoleSystem
 	ChatMessageRoleUser   = openai.ChatMessageRoleUser
 
-	MaxMessageLength  = 1900
-	MaxMessagesToKeep = 20
+	MaxMessageLength      = 1900
+	MaxMessagesToKeep     = 20
+	MaxToolCallIterations = 10
 )
 
 var (
@@ -60,8 +61,15 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 
 	choice := resp.Choices[0]
 
+	interations := 0
 	// Check if the model wants to use tools
 	for choice.FinishReason == openai.FinishReasonToolCalls && len(choice.Message.ToolCalls) > 0 {
+		interations++
+		if interations > MaxToolCallIterations {
+			log.Printf("Maximum tool call iterations (%d) exceeded", MaxToolCallIterations)
+			return "", fmt.Errorf("maximum tool call iterations exceeded")
+		}
+
 		log.Printf("Model wants to use tools. Number of tool calls: %d\n", len(choice.Message.ToolCalls))
 
 		followUpMessages := append(*messages, choice.Message)
@@ -277,39 +285,48 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 // Trim messages to a maximum length, only keeping the last maxMsg number of user messages
 func trimMsg(messages []ChatCompletionMessage, maxMsg int) []ChatCompletionMessage {
 	log.Printf("Trimming messages to a maximum of %d\n", maxMsg)
-	var temp []ChatCompletionMessage
-	i := 0
-	userMsgCount := 0
-	fmt.Println("messages length: ", len(messages))
-	for {
-		if i >= len(messages) {
-			if userMsgCount == 0 {
-				return messages // No user messages to trim
-			}
-			break
-		}
 
-		temp = append(temp, messages[len(messages)-1-i])
-
-		if userMsgCount >= maxMsg {
-			log.Println("Reached maximum number of user messages to keep.")
-			break
-		}
-
-		if messages[len(messages)-1-i].Role == ChatMessageRoleUser {
-			userMsgCount++
-		}
-		i++
+	if len(messages) == 0 {
+		return messages
 	}
 
-	// Add the system message at the end
-	temp = append(temp, messages[0])
+	fmt.Println("messages length: ", len(messages))
 
-	// Reverse the order of messages
+	// Always preserve the first message (usually system message)
+	firstMsg := messages[0]
+	var temp []ChatCompletionMessage
+	userMsgCount := 0
+
+	// Iterate from the end backwards, skipping the first message
+	for i := len(messages) - 1; i >= 1; i-- {
+		// Check if we've reached the maximum user messages before adding
+		if messages[i].Role == ChatMessageRoleUser {
+			if userMsgCount >= maxMsg {
+				log.Println("Reached maximum number of user messages to keep.")
+				break
+			}
+			userMsgCount++
+		}
+
+		temp = append(temp, messages[i])
+	}
+
+	// If no user messages were found, return original messages
+	if userMsgCount == 0 {
+		return messages
+	}
+
+	// Reverse temp to restore chronological order
 	for j := 0; j < len(temp)/2; j++ {
 		temp[j], temp[len(temp)-1-j] = temp[len(temp)-1-j], temp[j]
 	}
-	return temp
+
+	// Create result with first message at the beginning
+	result := make([]ChatCompletionMessage, 0, len(temp)+1)
+	result = append(result, firstMsg)
+	result = append(result, temp...)
+
+	return result
 }
 
 func parseUserInput(userInput string) (parsed string, skip bool) {
