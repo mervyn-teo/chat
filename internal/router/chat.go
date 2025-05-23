@@ -246,12 +246,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			// Trim messages
 			trimmed := trimMsg(messages[userID], 20)
-
-			if trimmed != nil {
-				messages[userID] = trimmed
-			} else {
-				log.Println("No messages to trim.")
-			}
+			messages[userID] = trimmed
 
 			storage.SaveChatHistory(messages, chatFilepath)
 
@@ -278,8 +273,10 @@ func trimMsg(messages []ChatCompletionMessage, maxMsg int) []ChatCompletionMessa
 	fmt.Println("messages length: ", len(messages))
 	for {
 		if i >= len(messages) {
-			fmt.Println("userMsgCount: ", userMsgCount)
-			return nil
+			if userMsgCount == 0 {
+				return messages // No user messages to trim
+			}
+			break
 		}
 
 		temp = append(temp, messages[len(messages)-1-i])
