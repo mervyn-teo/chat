@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"untitled/internal/bot"
 	"untitled/internal/music"
 	"untitled/internal/reminder"
@@ -24,11 +25,13 @@ const (
 	MaxMessagesToKeep = 20
 )
 
-var reminders reminder.ReminderList
+var (
+	reminders      reminder.ReminderList
+	remindersMutex sync.RWMutex
 
-// SongMap is a map of guild IDs to voice channel IDs to song lists
-// Each song list is linked to a specific voice channel
-var songMap map[string]map[string]*music.SongList = make(map[string]map[string]*music.SongList)
+	songMap      map[string]map[string]*music.SongList = make(map[string]map[string]*music.SongList)
+	songMapMutex sync.RWMutex
+)
 
 // SendMessage sends a message to the OpenRouter API and handles tool calls
 func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot *bot.Bot) (string, error) {
@@ -137,10 +140,16 @@ func runFunctionCall(toolCall openai.ToolCall, myBot *bot.Bot) (string, error) {
 
 	if strings.Contains(toolCall.Function.Name, "reminder") {
 		log.Printf("Reminder call detected. ID: %s", toolCall.ID)
+		remindersMutex.Lock()
 		resultString, err = tools.HandleReminderCall(toolCall, &reminders, myBot)
+		remindersMutex.Unlock()
+
 	} else if strings.Contains(toolCall.Function.Name, "song") {
 		log.Printf("Music call detected. ID: %s", toolCall.ID)
+		songMapMutex.Lock()
 		resultString, err = tools.HandleMusicCall(toolCall, &songMap, myBot)
+		songMapMutex.Unlock()
+
 	} else if strings.Contains(toolCall.Function.Name, "voice") {
 		log.Printf("Voice channel call detected. ID: %s", toolCall.ID)
 		resultString, err = tools.HandleVoiceChannel(toolCall, myBot)
