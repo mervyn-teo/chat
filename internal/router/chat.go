@@ -19,6 +19,9 @@ type ChatCompletionMessage = openai.ChatCompletionMessage
 const (
 	ChatMessageRoleSystem = openai.ChatMessageRoleSystem
 	ChatMessageRoleUser   = openai.ChatMessageRoleUser
+
+	MaxMessageLength  = 1900
+	MaxMessagesToKeep = 20
 )
 
 var reminders reminder.ReminderList
@@ -243,16 +246,16 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			messages[userID] = msg
 
 			// Trim messages
-			trimmed := trimMsg(messages[userID], 20)
+			trimmed := trimMsg(messages[userID], MaxMessagesToKeep)
 			messages[userID] = trimmed
 
 			storage.SaveChatHistory(messages, chatFilepath)
 
 			log.Println("Response to user: " + aiResponseContent)
 
-			if len(aiResponseContent) > 1900 {
+			if len(aiResponseContent) > MaxMessageLength {
 				// Split the response into chunks of 1900 characters
-				chunks := SplitString(aiResponseContent, 1900)
+				chunks := SplitString(aiResponseContent, MaxMessageLength)
 				go Mybot.RespondToLongMessage(userInput.Message.ChannelID, chunks, userInput.Message.Reference(), userInput.WaitMessage)
 				continue
 			}
