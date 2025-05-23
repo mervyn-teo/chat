@@ -24,6 +24,7 @@ const (
 	MaxMessageLength      = 1900
 	MaxMessagesToKeep     = 20
 	MaxToolCallIterations = 10
+	DefaultChunkSize      = 1900
 )
 
 var (
@@ -72,7 +73,6 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 
 		log.Printf("Model wants to use tools. Number of tool calls: %d\n", len(choice.Message.ToolCalls))
 
-		followUpMessages := append(*messages, choice.Message)
 		*messages = append(*messages, choice.Message)
 		var toolResponses []openai.ChatCompletionMessage
 
@@ -95,7 +95,6 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 			})
 		}
 
-		followUpMessages = append(followUpMessages, toolResponses...)
 		*messages = append(*messages, toolResponses...)
 
 		fmt.Println("\n--- Sending follow-up request with tool results ---")
@@ -103,7 +102,7 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 		// Create the follow-up request with the updated message history
 		followUpReq := openai.ChatCompletionRequest{
 			Model:    OpenRouterModel, // Use the same model
-			Messages: followUpMessages,
+			Messages: *messages,
 			Tools:    availableTools, // Include the tool calls in the follow-up request
 		}
 
@@ -175,19 +174,26 @@ func runFunctionCall(toolCall openai.ToolCall, myBot *bot.Bot) (string, error) {
 }
 
 func SplitString(s string, chunkSize int) []string {
-	log.Printf("Splitting string into chunks of size %d", chunkSize)
-	runes := []rune(s)
-	ret := make([]string, 0, len(runes)/chunkSize)
-	res := ""
-
-	for i, r := range runes {
-		res = res + string(r)
-		if i > 0 && ((i+1)%chunkSize == 0 || i == len(runes)-1) {
-			ret = append(ret, res)
-			res = ""
-		}
+	if chunkSize <= 0 {
+		log.Printf("Invalid chunk size: %d, using default", chunkSize)
+		chunkSize = DefaultChunkSize
 	}
 
+	runes := []rune(s)
+	if len(runes) == 0 {
+		return []string{""}
+	}
+
+	ret := make([]string, 0, (len(runes)/chunkSize)+1)
+	var res strings.Builder // Efficient string building
+
+	for i, r := range runes {
+		res.WriteRune(r)
+		if (i+1)%chunkSize == 0 || i == len(runes)-1 {
+			ret = append(ret, res.String())
+			res.Reset()
+		}
+	}
 	return ret
 }
 
