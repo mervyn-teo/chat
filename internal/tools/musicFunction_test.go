@@ -82,7 +82,10 @@ func (suite *MusicTestSuite) setupBot() {
 
 func (suite *MusicTestSuite) TearDownSuite() {
 	if suite.bot != nil && suite.bot.Session != nil {
-		suite.bot.Session.Close()
+		err := suite.bot.Session.Close()
+		if err != nil {
+			return
+		}
 	}
 	if suite.messageChannel != nil {
 		close(suite.messageChannel)
@@ -95,9 +98,17 @@ func (suite *MusicTestSuite) SetupTest() {
 }
 
 func (suite *MusicTestSuite) TearDownTest() {
-	// Clean up any playing songs
-	if songlist, exists := suite.getSongList(); exists && songlist.IsPlaying {
-		songlist.StopSong()
+	// Clean up any playing songs safely
+	if songlist, exists := suite.getSongList(); exists {
+		// Only try to stop if there's actually a voice connection
+		// This prevents panics when we mock IsPlaying without a real connection
+		if songlist.IsPlaying {
+			// Reset the playing state manually for mocked tests
+			songlist.Mu.Lock()
+			songlist.IsPlaying = false
+			songlist.Mu.Unlock()
+
+		}
 		time.Sleep(100 * time.Millisecond) // Brief pause for cleanup
 	}
 }
@@ -157,6 +168,7 @@ func (suite *MusicTestSuite) createToolCall(functionName, args string) openai.To
 	}
 
 	return openai.ToolCall{
+		Type: openai.ToolTypeFunction,
 		Function: openai.FunctionCall{
 			Name:      functionName,
 			Arguments: args,
@@ -164,7 +176,80 @@ func (suite *MusicTestSuite) createToolCall(functionName, args string) openai.To
 	}
 }
 
-func (suite *MusicTestSuite) TestAddSong() {
+// Helper method to safely set playing state for tests
+func (suite *MusicTestSuite) setPlayingState(isPlaying bool) {
+	songlist, exists := suite.getSongList()
+	require.True(suite.T(), exists)
+
+	songlist.Mu.Lock()
+	songlist.IsPlaying = isPlaying
+	songlist.Mu.Unlock()
+}
+
+// Test HandleMusicCall function
+func (suite *MusicTestSuite) TestHandleMusicCall_UnsupportedToolType() {
+	call := openai.ToolCall{
+		Type: "unsupported_type",
+		Function: openai.FunctionCall{
+			Name:      "test_function",
+			Arguments: "{}",
+		},
+	}
+
+	msg, err := HandleMusicCall(call, &suite.songMap, suite.bot)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Unsupported tool type")
+	assert.Contains(suite.T(), err.Error(), "unsupported tool type")
+}
+
+func (suite *MusicTestSuite) TestHandleMusicCall_UnknownFunction() {
+	call := suite.createToolCall("unknown_function", "")
+
+	msg, err := HandleMusicCall(call, &suite.songMap, suite.bot)
+
+	assert.Error(suite.T(), err)
+	assert.Empty(suite.T(), msg)
+	assert.Contains(suite.T(), err.Error(), "function unknown_function not found")
+}
+
+func (suite *MusicTestSuite) TestHandleMusicCall_ValidFunctions() {
+	testCases := []struct {
+		functionName string
+		args         string
+		expectError  bool
+	}{
+		{
+			functionName: "get_current_songList",
+			args:         "",
+			expectError:  false,
+		},
+		{
+			functionName: "add_song",
+			args: fmt.Sprintf(`{"gid": "%s", "cid": "%s", "title": "Test Song", "url": "https://www.youtube.com/watch?v=test"}`,
+				suite.testGuildID, suite.testChannelID),
+			expectError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.T().Run(tc.functionName, func(t *testing.T) {
+			call := suite.createToolCall(tc.functionName, tc.args)
+
+			msg, err := HandleMusicCall(call, &suite.songMap, suite.bot)
+
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotEmpty(t, msg)
+			}
+		})
+	}
+}
+
+// Test addSong function
+func (suite *MusicTestSuite) TestAddSong_Success() {
 	args := fmt.Sprintf(`{"gid": "%s", "cid": "%s", "title": "New Song", "url": "https://www.youtube.com/watch?v=cLdWfNbBMvc"}`,
 		suite.testGuildID, suite.testChannelID)
 
@@ -174,13 +259,45 @@ func (suite *MusicTestSuite) TestAddSong() {
 
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), msg, "Song added successfully")
+	assert.Contains(suite.T(), msg, "New Song")
+	assert.Contains(suite.T(), msg, "https://www.youtube.com/watch?v=cLdWfNbBMvc")
 
 	songlist, exists := suite.getSongList()
 	require.True(suite.T(), exists)
 	assert.Equal(suite.T(), "New Song", songlist.Songs[len(songlist.Songs)-1].Title)
 }
 
-func (suite *MusicTestSuite) TestRemoveSong() {
+func (suite *MusicTestSuite) TestAddSong_InvalidJSON() {
+	call := suite.createToolCall("add_song", "invalid json")
+
+	msg, err := addSong(call, &suite.songMap)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Failed to parse arguments")
+	assert.Contains(suite.T(), err.Error(), "argument parsing failed")
+}
+
+func (suite *MusicTestSuite) TestAddSong_NilSongMap() {
+	// Create a nil song map to test the nil check
+	var nilSongMap map[string]map[string]*music.SongList
+
+	args := fmt.Sprintf(`{"gid": "%s", "cid": "%s", "title": "Test Song", "url": "https://www.youtube.com/watch?v=test"}`,
+		suite.testGuildID, suite.testChannelID)
+	call := suite.createToolCall("add_song", args)
+
+	// This should handle the nil case gracefully
+	msg, err := addSong(call, &nilSongMap)
+
+	// The function should either handle this gracefully or return an appropriate error
+	if err != nil {
+		assert.Contains(suite.T(), err.Error(), "failed to add song")
+	} else {
+		assert.Contains(suite.T(), msg, "Song added successfully")
+	}
+}
+
+// Test removeSong function
+func (suite *MusicTestSuite) TestRemoveSong_Success() {
 	args := fmt.Sprintf(`{"gid": "%s", "cid": "%s", "uuid": "d3J3uJpCgos"}`,
 		suite.testGuildID, suite.testChannelID)
 
@@ -203,12 +320,43 @@ func (suite *MusicTestSuite) TestRemoveSong() {
 	}
 }
 
-func (suite *MusicTestSuite) TestGetCurrentSongList() {
-	call := suite.createToolCall("get_current_song_list", "")
+func (suite *MusicTestSuite) TestRemoveSong_SongListNotFound() {
+	args := fmt.Sprintf(`{"gid": "nonexistent", "cid": "nonexistent", "uuid": "test"}`)
+	call := suite.createToolCall("remove_song", args)
+
+	msg, err := removeSong(call, &suite.songMap)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Cannot remove song, song list not found")
+	assert.Contains(suite.T(), err.Error(), "song list not found")
+}
+
+func (suite *MusicTestSuite) TestRemoveSong_CannotRemovePlayingSong() {
+	// Set the song as playing safely
+	suite.setPlayingState(true)
+
+	args := fmt.Sprintf(`{"gid": "%s", "cid": "%s", "uuid": "d3J3uJpCgos"}`,
+		suite.testGuildID, suite.testChannelID)
+	call := suite.createToolCall("remove_song", args)
+
+	msg, err := removeSong(call, &suite.songMap)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Cannot remove song while playing")
+	assert.Contains(suite.T(), err.Error(), "cannot remove song while playing")
+
+	// Reset state
+	suite.setPlayingState(false)
+}
+
+// Test getCurrentSongList function
+func (suite *MusicTestSuite) TestGetCurrentSongList_Success() {
+	call := suite.createToolCall("get_current_songList", "")
 
 	msg, err := getCurrentSongList(call, &suite.songMap)
 
 	assert.NoError(suite.T(), err)
+	assert.Contains(suite.T(), msg, "songs: [")
 	assert.Contains(suite.T(), msg, "Song 1")
 	assert.Contains(suite.T(), msg, "Song 2")
 	assert.Contains(suite.T(), msg, "Song 3")
@@ -216,7 +364,37 @@ func (suite *MusicTestSuite) TestGetCurrentSongList() {
 	assert.Contains(suite.T(), msg, "d3J3uJpCgos")
 }
 
-func (suite *MusicTestSuite) TestPlayMusic() {
+func (suite *MusicTestSuite) TestGetCurrentSongList_EmptyList() {
+	// Create empty songlist
+	suite.songMap[suite.testGuildID][suite.testChannelID].Songs = []music.Song{}
+
+	call := suite.createToolCall("get_current_songList", "")
+
+	msg, err := getCurrentSongList(call, &suite.songMap)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "songs: []", msg)
+}
+
+func (suite *MusicTestSuite) TestGetCurrentSongList_NilSongList() {
+	// Remove the songlist to test nil handling
+	delete(suite.songMap[suite.testGuildID], suite.testChannelID)
+
+	call := suite.createToolCall("get_current_songList", "")
+
+	msg, err := getCurrentSongList(call, &suite.songMap)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "songs: []", msg)
+
+	// Verify that a new songlist was created
+	songlist, exists := suite.getSongList()
+	assert.True(suite.T(), exists)
+	assert.NotNil(suite.T(), songlist)
+}
+
+// Test playSong function (requires bot)
+func (suite *MusicTestSuite) TestPlaySong_Success() {
 	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
 		suite.T().Skip("Skipping YouTube tests")
 	}
@@ -241,14 +419,42 @@ func (suite *MusicTestSuite) TestPlayMusic() {
 	assert.True(suite.T(), songlist.IsPlaying)
 }
 
-func (suite *MusicTestSuite) TestSkipSong() {
+func (suite *MusicTestSuite) TestPlaySong_SongListNotFound() {
+	args := fmt.Sprintf(`{"gid": "nonexistent", "cid": "nonexistent"}`)
+	call := suite.createToolCall("play_song", args)
+
+	msg, err := playSong(call, &suite.songMap, suite.bot)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Cannot play song, song list not found")
+	assert.Contains(suite.T(), err.Error(), "song list not found")
+}
+
+func (suite *MusicTestSuite) TestPlaySong_AlreadyPlaying() {
+	// Set song as already playing safely
+	suite.setPlayingState(true)
+
+	call := suite.createToolCall("play_song", "")
+
+	msg, err := playSong(call, &suite.songMap, suite.bot)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Cannot play song while already playing")
+	assert.Contains(suite.T(), err.Error(), "cannot play song while already playing")
+
+	// Reset state for cleanup
+	suite.setPlayingState(false)
+}
+
+// Test skipSong function
+func (suite *MusicTestSuite) TestSkipSong_Success() {
 	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
 		suite.T().Skip("Skipping YouTube tests")
 	}
 
 	require.NotNil(suite.T(), suite.bot, "Bot must be initialized for skip tests")
 
-	call := suite.createToolCall("", "")
+	call := suite.createToolCall("skip_song", "")
 
 	// Start playing first
 	_, err := playSong(call, &suite.songMap, suite.bot)
@@ -266,14 +472,41 @@ func (suite *MusicTestSuite) TestSkipSong() {
 	time.Sleep(1 * time.Second) // Brief pause before cleanup
 }
 
-func (suite *MusicTestSuite) TestPauseSong() {
+func (suite *MusicTestSuite) TestSkipSong_NoSongsToSkip() {
+	// Create songlist with only one song
+	songlist, exists := suite.getSongList()
+	require.True(suite.T(), exists)
+	songlist.Songs = songlist.Songs[:1] // Keep only first song
+
+	call := suite.createToolCall("skip_song", "")
+
+	msg, err := skipSong(call, &suite.songMap, suite.bot)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "No songs to skip")
+	assert.Contains(suite.T(), err.Error(), "no songs to skip")
+}
+
+func (suite *MusicTestSuite) TestSkipSong_SongListNotFound() {
+	args := fmt.Sprintf(`{"gid": "nonexistent", "cid": "nonexistent"}`)
+	call := suite.createToolCall("skip_song", args)
+
+	msg, err := skipSong(call, &suite.songMap, suite.bot)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Cannot skip song, song list not found")
+	assert.Contains(suite.T(), err.Error(), "song list not found")
+}
+
+// Test pauseSong function
+func (suite *MusicTestSuite) TestPauseSong_Success() {
 	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
 		suite.T().Skip("Skipping YouTube tests")
 	}
 
 	require.NotNil(suite.T(), suite.bot, "Bot must be initialized for pause tests")
 
-	call := suite.createToolCall("", "")
+	call := suite.createToolCall("pause_song", "")
 
 	// Start playing first
 	_, err := playSong(call, &suite.songMap, suite.bot)
@@ -288,14 +521,36 @@ func (suite *MusicTestSuite) TestPauseSong() {
 	assert.Equal(suite.T(), "Song paused successfully", msg)
 }
 
-func (suite *MusicTestSuite) TestStopSong() {
+func (suite *MusicTestSuite) TestPauseSong_NotPlaying() {
+	call := suite.createToolCall("pause_song", "")
+
+	msg, err := pauseSong(call, &suite.songMap)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Cannot pause song while not playing")
+	assert.Contains(suite.T(), err.Error(), "cannot pause song while not playing")
+}
+
+func (suite *MusicTestSuite) TestPauseSong_SongListNotFound() {
+	args := fmt.Sprintf(`{"gid": "nonexistent", "cid": "nonexistent"}`)
+	call := suite.createToolCall("pause_song", args)
+
+	msg, err := pauseSong(call, &suite.songMap)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Cannot pause song, song list not found")
+	assert.Contains(suite.T(), err.Error(), "song list not found")
+}
+
+// Test stopSong function
+func (suite *MusicTestSuite) TestStopSong_Success() {
 	if os.Getenv("SKIP_YOUTUBE_TESTS") == "true" {
 		suite.T().Skip("Skipping YouTube tests")
 	}
 
 	require.NotNil(suite.T(), suite.bot, "Bot must be initialized for stop tests")
 
-	call := suite.createToolCall("", "")
+	call := suite.createToolCall("stop_song", "")
 
 	// Start playing first
 	_, err := playSong(call, &suite.songMap, suite.bot)
@@ -317,18 +572,119 @@ func (suite *MusicTestSuite) TestStopSong() {
 	assert.False(suite.T(), songlist.IsPlaying)
 }
 
+func (suite *MusicTestSuite) TestStopSong_NotPlaying() {
+	call := suite.createToolCall("stop_song", "")
+
+	msg, err := stopSong(call, &suite.songMap)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Cannot stop song while not playing")
+	assert.Contains(suite.T(), err.Error(), "cannot stop song while not playing")
+}
+
+func (suite *MusicTestSuite) TestStopSong_SongListNotFound() {
+	args := fmt.Sprintf(`{"gid": "nonexistent", "cid": "nonexistent"}`)
+	call := suite.createToolCall("stop_song", args)
+
+	msg, err := stopSong(call, &suite.songMap)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), msg, "Cannot stop song, song list not found")
+	assert.Contains(suite.T(), err.Error(), "song list not found")
+}
+
+// Test argument parsing errors for all functions
+func (suite *MusicTestSuite) TestArgumentParsingErrors() {
+	functions := []string{
+		"get_current_songList",
+		"add_song",
+		"remove_song",
+		"skip_song",
+		"play_song",
+		"pause_song",
+		"stop_song",
+	}
+
+	for _, funcName := range functions {
+		suite.T().Run(funcName+"_InvalidJSON", func(t *testing.T) {
+			call := suite.createToolCall(funcName, "invalid json")
+
+			var msg string
+			var err error
+
+			switch funcName {
+			case "get_current_songList":
+				msg, err = getCurrentSongList(call, &suite.songMap)
+			case "add_song":
+				msg, err = addSong(call, &suite.songMap)
+			case "remove_song":
+				msg, err = removeSong(call, &suite.songMap)
+			case "skip_song":
+				msg, err = skipSong(call, &suite.songMap, suite.bot)
+			case "play_song":
+				msg, err = playSong(call, &suite.songMap, suite.bot)
+			case "pause_song":
+				msg, err = pauseSong(call, &suite.songMap)
+			case "stop_song":
+				msg, err = stopSong(call, &suite.songMap)
+			}
+
+			assert.Error(t, err)
+			assert.Contains(t, msg, "Failed to parse arguments")
+			assert.Contains(t, err.Error(), "argument parsing failed")
+		})
+	}
+}
+
 // Benchmark tests
 func BenchmarkAddSong(b *testing.B) {
-	suite := &MusicTestSuite{}
-	suite.SetupSuite()
-	defer suite.TearDownSuite()
+	s := &MusicTestSuite{}
+	s.SetupSuite()
+	defer s.TearDownSuite()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		suite.SetupTest()
+		s.SetupTest()
 		args := fmt.Sprintf(`{"gid": "%s", "cid": "%s", "title": "Benchmark Song %d", "url": "https://www.youtube.com/watch?v=test%d"}`,
-			suite.testGuildID, suite.testChannelID, i, i)
-		call := suite.createToolCall("add_song", args)
-		addSong(call, &suite.songMap)
+			s.testGuildID, s.testChannelID, i, i)
+		call := s.createToolCall("add_song", args)
+		_, err := addSong(call, &s.songMap)
+		if err != nil {
+			return
+		}
+	}
+}
+
+func BenchmarkGetCurrentSongList(b *testing.B) {
+	s := &MusicTestSuite{}
+	s.SetupSuite()
+	s.SetupTest()
+	defer s.TearDownSuite()
+
+	call := s.createToolCall("get_current_songList", "")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := getCurrentSongList(call, &s.songMap)
+		if err != nil {
+			return
+		}
+	}
+}
+
+func BenchmarkHandleMusicCall(b *testing.B) {
+	s := &MusicTestSuite{}
+	s.SetupSuite()
+	s.SetupTest()
+	defer s.TearDownSuite()
+
+	call := s.createToolCall("get_current_songList", "")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := HandleMusicCall(call, &s.songMap, s.bot)
+		if err != nil {
+			return
+		}
 	}
 }
