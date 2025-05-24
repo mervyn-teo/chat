@@ -20,36 +20,6 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-// Mock bot for testing
-type mockBot struct {
-	responses []string
-	mutex     sync.Mutex
-}
-
-func (m *mockBot) RespondToMessage(channelID, content string, reference interface{}, waitMessage interface{}) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	m.responses = append(m.responses, content)
-}
-
-func (m *mockBot) RespondToLongMessage(channelID string, chunks []string, reference interface{}, waitMessage interface{}) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	m.responses = append(m.responses, strings.Join(chunks, ""))
-}
-
-func (m *mockBot) GetResponses() []string {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	return append([]string{}, m.responses...)
-}
-
-func (m *mockBot) ClearResponses() {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	m.responses = []string{}
-}
-
 // Mock OpenAI server
 func createMockOpenAIServer(responses []openai.ChatCompletionResponse) *httptest.Server {
 	responseIndex := 0
@@ -59,7 +29,10 @@ func createMockOpenAIServer(responses []openai.ChatCompletionResponse) *httptest
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(responses[responseIndex])
+		err := json.NewEncoder(w).Encode(responses[responseIndex])
+		if err != nil {
+			return
+		}
 		responseIndex++
 	}))
 }
@@ -468,8 +441,16 @@ func TestMessageLoop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tempChatFile.Name())
-	tempChatFile.Close()
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+
+		}
+	}(tempChatFile.Name())
+	err = tempChatFile.Close()
+	if err != nil {
+		return
+	}
 
 	// Create mock bot
 	//mockBot := &mockBot{}
@@ -594,22 +575,73 @@ func TestConcurrentAccess(t *testing.T) {
 }
 
 func TestConstants(t *testing.T) {
-	// Test that constants have expected values
-	if MaxMessageLength != 1900 {
-		t.Errorf("Expected MaxMessageLength to be 1900, got %d", MaxMessageLength)
+	intConstTest := []struct {
+		name     string
+		constant int
+		expected int
+	}{
+		{
+			name:     "MaxMessageLength",
+			constant: MaxMessageLength,
+			expected: 1900,
+		},
+		{
+			name:     "MaxMessagesToKeep",
+			constant: MaxMessagesToKeep,
+			expected: 20,
+		},
+		{
+			name:     "MaxToolCallIterations",
+			constant: MaxToolCallIterations,
+			expected: 10,
+		},
+		{
+			name:     "DefaultChunkSize",
+			constant: DefaultChunkSize,
+			expected: 1900,
+		},
 	}
 
-	if MaxMessagesToKeep != 20 {
-		t.Errorf("Expected MaxMessagesToKeep to be 20, got %d", MaxMessagesToKeep)
+	for _, tt := range intConstTest {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.constant != tt.expected {
+				t.Errorf("Expected %s to be %d, got %d",
+					tt.name, tt.expected, tt.constant)
+			}
+		})
 	}
 
-	if MaxToolCallIterations != 10 {
-		t.Errorf("Expected MaxToolCallIterations to be 10, got %d", MaxToolCallIterations)
+	textContTest := []struct {
+		name     string
+		constant string
+		expected string
+	}{
+		{
+			name:     "OpenRouterBaseURL",
+			constant: OpenRouterBaseURL,
+			expected: "https://openrouter.ai/api/v1",
+		},
+		{
+			name:     "RefererURL",
+			constant: RefererURL,
+			expected: "http://localhost",
+		},
+		{
+			name:     "AppTitle",
+			constant: AppTitle,
+			expected: "Go OpenRouter CLI",
+		},
 	}
 
-	if DefaultChunkSize != 1900 {
-		t.Errorf("Expected DefaultChunkSize to be 1900, got %d", DefaultChunkSize)
+	for _, tt := range textContTest {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.constant != tt.expected {
+				t.Errorf("Expected %s to be %q, got %q",
+					tt.name, tt.expected, tt.constant)
+			}
+		})
 	}
+
 }
 
 // Benchmark tests

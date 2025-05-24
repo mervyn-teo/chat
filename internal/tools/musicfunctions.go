@@ -226,12 +226,20 @@ func addSong(call openai.ToolCall, s *map[string]map[string]*music.SongList) (st
 		return fmt.Sprintf(`Failed to parse arguments for function '%s': %v`, call.Function.Name, err), fmt.Errorf("argument parsing failed: %w", err)
 	}
 
+	// Initialize the map if it's nil
 	if *s == nil {
-		fmt.Println("Song map is nil, loading from file")
+		fmt.Println("Song map is nil, attempting to load from file")
 		err := music.LoadSongMapFromFile(s)
 		if err != nil {
-			return "", err
+			// If loading fails, initialize an empty map
+			fmt.Println("Failed to load from file, initializing empty map")
+			*s = make(map[string]map[string]*music.SongList)
 		}
+	}
+
+	// Ensure the outer map is not nil after initialization
+	if *s == nil {
+		*s = make(map[string]map[string]*music.SongList)
 	}
 
 	innerMap, ok := (*s)[args.GID]
