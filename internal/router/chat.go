@@ -249,11 +249,8 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			if *userInput.IsForget {
 				log.Printf("INFO: Forget command received for UserID: %s in ChannelID: %s.", userID, channelID)
 				messages[userID] = setInitialMessages(instructions, userID)
-				if err := storage.SaveChatHistory(messages, chatFilepath); err != nil {
-					log.Printf("ERROR: Failed to save chat history after forget command for UserID %s: %v", userID, err)
-				} else {
-					log.Printf("INFO: Chat history saved after forget command for UserID %s.", userID)
-				}
+				storage.SaveChatHistory(messages, chatFilepath) // Call without assigning error
+				log.Printf("INFO: Chat history save attempt after forget command for UserID %s.", userID) // Generic log, actual error/success is in SaveChatHistory or its callees
 				go Mybot.RespondToMessage(channelID, "Your message history with me has been cleared.", userInput.Message.Reference(), userInput.WaitMessage)
 				continue
 			}
@@ -311,11 +308,8 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			trimmedMessages := trimMsg(messages[userID], MaxMessagesToKeep)
 			messages[userID] = trimmedMessages
 
-			if err := storage.SaveChatHistory(messages, chatFilepath); err != nil {
-				log.Printf("ERROR: Failed to save chat history for UserID %s: %v", userID, err)
-			} else {
-				log.Printf("INFO: Chat history saved for UserID %s.", userID)
-			}
+			storage.SaveChatHistory(messages, chatFilepath) // Call without assigning error
+			log.Printf("INFO: Chat history save attempt for UserID %s.", userID) // Generic log
 
 			log.Printf("INFO: Response to UserID %s in ChannelID %s: \"%s\"", userID, channelID, aiResponseContent)
 
