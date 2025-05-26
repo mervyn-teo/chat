@@ -43,7 +43,7 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 
 	availableTools := tools.GetAvailableTools()
 	if len(availableTools) < 1 {
-		log.Println("Warning: No tools available for the model to use.")
+		log.Printf("WARN: No tools available for the model to use.")
 	}
 
 	resp, err := client.CreateChatCompletion(
@@ -60,7 +60,7 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 	}
 
 	if len(resp.Choices) == 0 {
-		log.Println("received an empty response from API, trying again")
+		log.Printf("ERROR: Received an empty response from API on initial request.")
 		return "", fmt.Errorf("received an empty response from API")
 	}
 
@@ -71,75 +71,78 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 	for choice.FinishReason == openai.FinishReasonToolCalls && len(choice.Message.ToolCalls) > 0 {
 		interations++
 		if interations > MaxToolCallIterations {
-			log.Printf("Maximum tool call iterations (%d) exceeded", MaxToolCallIterations)
+			log.Printf("ERROR: Maximum tool call iterations (%d) exceeded.", MaxToolCallIterations)
 			return "", fmt.Errorf("maximum tool call iterations exceeded")
 		}
 
-		log.Printf("Model wants to use tools. Number of tool calls: %d\n", len(choice.Message.ToolCalls))
+		log.Printf("INFO: Model wants to use tools. Iteration: %d, Number of tool calls: %d.", interations, len(choice.Message.ToolCalls))
 
-		*messages = append(*messages, choice.Message)
+		*messages = append(*messages, choice.Message) // Add assistant's message with tool calls
 		var toolResponses []openai.ChatCompletionMessage
 
 		for _, toolCall := range choice.Message.ToolCalls {
-
+			log.Printf("DEBUG: Processing tool call ID: %s, Function: %s, Arguments: %s", toolCall.ID, toolCall.Function.Name, toolCall.Function.Arguments)
 			resultString, err := runFunctionCall(toolCall, myBot)
 
 			if err != nil {
-				log.Printf("Failed to execute tool call %s (%s): %v", toolCall.ID, toolCall.Function.Name, err)
-				fmt.Println("result Str: " + resultString)
+				// Log the error from runFunctionCall itself (e.g., failed to execute, not necessarily error from the tool's logic)
+				log.Printf("ERROR: Error running function call %s (%s): %v", toolCall.ID, toolCall.Function.Name, err)
+				// It's important that resultString still contains an error message for the LLM in this case.
+				// The runFunctionCall is expected to produce a string indicating the error to the LLM.
 			} else {
-				log.Printf("Successfully executed tool call %s (%s)", toolCall.ID, toolCall.Function.Name)
+				log.Printf("INFO: Successfully executed tool call %s (%s).", toolCall.ID, toolCall.Function.Name)
 			}
+			log.Printf("DEBUG: Result for tool call %s: %s", toolCall.ID, resultString)
 
-			// Prepare the message with the function result for the next API call
 			toolResponses = append(toolResponses, openai.ChatCompletionMessage{
 				Role:       openai.ChatMessageRoleTool,
-				Content:    resultString,
+				Content:    resultString, // This content should be the actual result or an error message from the tool's execution.
 				ToolCallID: toolCall.ID,
 			})
 		}
 
-		*messages = append(*messages, toolResponses...)
+		*messages = append(*messages, toolResponses...) // Add tool responses to history
 
-		fmt.Println("\n--- Sending follow-up request with tool results ---")
-
-		// Create the follow-up request with the updated message history
+		log.Printf("INFO: Sending follow-up request to OpenRouter with %d tool responses.", len(toolResponses))
 		followUpReq := openai.ChatCompletionRequest{
-			Model:    OpenRouterModel, // Use the same model
+			Model:    OpenRouterModel,
 			Messages: *messages,
-			Tools:    availableTools, // Include the tool calls in the follow-up request
+			Tools:    availableTools,
 		}
 
-		log.Println("Sending follow-up request...")
 		finalResp, finalErr := client.CreateChatCompletion(context.Background(), followUpReq)
 
 		if finalErr != nil {
-			log.Fatalf("Error creating follow-up chat completion: %v", finalErr)
+			log.Printf("ERROR: Error creating follow-up chat completion: %v", finalErr)
+			return "", fmt.Errorf("error creating follow-up chat completion: %w", finalErr)
 		}
 
 		if len(finalResp.Choices) == 0 {
-			log.Println("received an empty response from openRouter, trying again")
-			return "", fmt.Errorf("received an empty response from openRouter")
+			log.Printf("ERROR: Received an empty response from OpenRouter on follow-up request.")
+			return "", fmt.Errorf("received an empty response from openRouter on follow-up")
 		}
 
-		*messages = append(*messages, finalResp.Choices[0].Message)
-
+		*messages = append(*messages, finalResp.Choices[0].Message) // Add assistant's final response
 		choice = finalResp.Choices[0]
 
 		if choice.FinishReason == openai.FinishReasonToolCalls {
+			log.Printf("INFO: Model wants to use tools again. Continuing iteration.")
 			continue
 		}
 
-		// The final response from the model, incorporating the tool results
-		fmt.Println("\n--- Final response from model ---")
+		log.Printf("INFO: Model finished generating response after tool calls. Finish reason: %s.", choice.FinishReason)
 		return finalResp.Choices[0].Message.Content, nil
 	}
 
+	// This block is reached if the first response did not involve tool calls
 	if choice.FinishReason == openai.FinishReasonStop {
-		*messages = append(*messages, resp.Choices[0].Message)
+		*messages = append(*messages, resp.Choices[0].Message) // Add assistant's message
+		log.Printf("INFO: Model finished generating response (no tool calls). Finish reason: %s.", choice.FinishReason)
 		return choice.Message.Content, nil
 	}
 
+	log.Printf("WARN: Model stopped for an unexpected reason: %s. Content: %s", choice.FinishReason, choice.Message.Content)
+	*messages = append(*messages, resp.Choices[0].Message) // Still add the message
 	return resp.Choices[0].Message.Content, nil
 }
 
@@ -150,36 +153,35 @@ func runFunctionCall(toolCall openai.ToolCall, myBot *bot.Bot) (string, error) {
 	// Check if the tool call is a function call
 
 	if strings.Contains(toolCall.Function.Name, "reminder") {
-		log.Printf("Reminder call detected. ID: %s", toolCall.ID)
+		log.Printf("INFO: Reminder call detected. ToolCall ID: %s, Function: %s", toolCall.ID, toolCall.Function.Name)
 		remindersMutex.Lock()
 		resultString, err = tools.HandleReminderCall(toolCall, &reminders, myBot)
 		remindersMutex.Unlock()
 
 	} else if strings.Contains(toolCall.Function.Name, "song") {
-		log.Printf("Music call detected. ID: %s", toolCall.ID)
+		log.Printf("INFO: Music call detected. ToolCall ID: %s, Function: %s", toolCall.ID, toolCall.Function.Name)
 		songMapMutex.Lock()
 		resultString, err = tools.HandleMusicCall(toolCall, &songMap, myBot)
 		songMapMutex.Unlock()
 
 	} else if strings.Contains(toolCall.Function.Name, "voice") {
-		log.Printf("Voice channel call detected. ID: %s", toolCall.ID)
+		log.Printf("INFO: Voice channel call detected. ToolCall ID: %s, Function: %s", toolCall.ID, toolCall.Function.Name)
 		resultString, err = tools.HandleVoiceChannel(toolCall, myBot)
 	} else {
-		log.Printf("Normal function call detected. ID: %s\n", toolCall.ID)
+		log.Printf("INFO: Normal function call detected. ToolCall ID: %s, Function: %s", toolCall.ID, toolCall.Function.Name)
 		resultString, err = tools.ExecuteToolCall(toolCall)
 	}
 
-	if err != nil {
-		log.Printf("Error executing function call: %v", err)
-		return resultString, err
-	}
-
-	return resultString, nil
+	// The error 'err' from tool execution (e.g., tool's internal logic error) is distinct from
+	// an error in runFunctionCall itself (e.g., unknown tool).
+	// The SendMessage function already logs if 'err' is not nil, along with toolCall.ID and Function.Name.
+	// So, no redundant logging of 'err' here.
+	return resultString, err
 }
 
 func SplitString(s string, chunkSize int) []string {
 	if chunkSize <= 0 {
-		log.Printf("Invalid chunk size: %d, using default", chunkSize)
+		log.Printf("WARN: Invalid chunk size %d, using default %d.", chunkSize, DefaultChunkSize)
 		chunkSize = DefaultChunkSize
 	}
 
@@ -204,87 +206,121 @@ func SplitString(s string, chunkSize int) []string {
 func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string) {
 	err := reminder.LoadRemindersFromFile(&reminders)
 	if err != nil {
-		log.Println("Error loading reminders from file:", err)
+		log.Printf("ERROR: Error loading reminders from file '%s': %v", "reminders.json", err)
+		log.Printf("ERROR: MessageLoop cannot start without reminders. Returning.")
 		return
 	}
+	log.Printf("INFO: Reminders loaded successfully.")
 
-	err = music.LoadSongMapFromFile(&songMap)
+	err = music.LoadSongMapFromFile(&songMap) // Assuming this function exists and is similar to LoadReminders
 	if err != nil {
-		log.Println("Error loading song map from file:", err)
+		log.Printf("ERROR: Error loading song map from file: %v", err) // Add filename if available
+		log.Printf("ERROR: MessageLoop cannot start without song map. Returning.")
 		return
 	}
+	log.Printf("INFO: Song map loaded successfully.")
 
 	if messages == nil {
-		log.Println("Router loop: messages map is nil, initializing.")
+		log.Printf("INFO: MessageLoop: messages map is nil, initializing.")
 		messages = initRouter()
-		storage.SaveChatHistory(messages, chatFilepath)
+		// It's better to save history only when it changes.
+		// If initRouter() creates an empty map, saving it now is not essential.
 	}
 
+	log.Printf("INFO: MessageLoop started. Waiting for messages on channel.")
 	for {
 		select {
-		case <-ctx.Done(): // Check if context has been cancelled
-			log.Println("Router loop: shutdown signal received.")
-			// Perform any necessary cleanup within the router
-			return // Exit the loop
+		case <-ctx.Done():
+			log.Printf("INFO: MessageLoop: Shutdown signal received via context.Done().")
+			return
 
-		case userInput := <-messageChannel:
-
-			if *userInput.IsForget {
-				// Handle the forget command
-				messages[userInput.Message.Author.ID] = setInitialMessages(instructions, userInput.Message.Author.ID)
-				storage.SaveChatHistory(messages, chatFilepath)
-
-				log.Printf("Forget command executed for user %s in channel %s", userInput.Message.Author.ID, userInput.Message.ChannelID)
-				go Mybot.RespondToMessage(userInput.Message.ChannelID, "Your message history has been cleared", userInput.Message.Reference(), userInput.WaitMessage)
-				continue
+		case userInput, ok := <-messageChannel:
+			if !ok {
+				log.Printf("INFO: MessageLoop: messageChannel was closed. Exiting loop.")
+				return
 			}
 
 			userID := userInput.Message.Author.ID
-			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
-			parsedUserMsg = fmt.Sprintf("userID: %s, userName: %s said in guildID: %s, text channelID %s: %s", userID, userInput.Message.Author.Username, userInput.Message.GuildID, userInput.Message.ChannelID, parsedUserMsg)
+			channelID := userInput.Message.ChannelID
+			guildID := userInput.Message.GuildID // Assuming GuildID is part of userInput.Message
 
-			if isSkip {
+			log.Printf("DEBUG: Received message from UserID: %s, ChannelID: %s, GuildID: %s", userID, channelID, guildID)
+
+			if *userInput.IsForget {
+				log.Printf("INFO: Forget command received for UserID: %s in ChannelID: %s.", userID, channelID)
+				messages[userID] = setInitialMessages(instructions, userID)
+				if err := storage.SaveChatHistory(messages, chatFilepath); err != nil {
+					log.Printf("ERROR: Failed to save chat history after forget command for UserID %s: %v", userID, err)
+				} else {
+					log.Printf("INFO: Chat history saved after forget command for UserID %s.", userID)
+				}
+				go Mybot.RespondToMessage(channelID, "Your message history with me has been cleared.", userInput.Message.Reference(), userInput.WaitMessage)
 				continue
 			}
 
+			// Construct user message with all relevant context for the LLM
+			parsedUserMsgContent, isSkip := parseUserInput(userInput.Message.Content)
+			if isSkip {
+				log.Printf("DEBUG: Skipping empty or whitespace message from UserID %s in ChannelID %s.", userID, channelID)
+				// Important: If we skip, we must handle the WaitMessage, otherwise it will hang around.
+				if userInput.WaitMessage != nil {
+					// Assuming Mybot has a method to just delete the wait message without sending a new one.
+					// If not, this needs to be implemented in bot.go
+					// For now, let's assume Mybot.RespondToMessage handles waitMessage deletion even with empty response.
+					// A dedicated Mybot.DeleteWaitMessage(channelID, messageID) would be cleaner.
+					go Mybot.RespondToMessage(channelID, "", userInput.Message.Reference(), userInput.WaitMessage)
+				}
+				continue
+			}
+			// Full context for the LLM
+			parsedUserMsg := fmt.Sprintf("UserID: %s, UserName: %s, GuildID: %s, ChannelID: %s, says: %s", userID, userInput.Message.Author.Username, guildID, channelID, parsedUserMsgContent)
+			log.Printf("DEBUG: Parsed user message for LLM: %s", parsedUserMsg)
+
+
 			currentMessages, userExists := messages[userID]
 			if !userExists {
-				// First message from this user, initialize with system prompt
-				log.Printf("Initializing conversation for user: %s", userID)
+				log.Printf("INFO: Initializing new conversation history for UserID: %s.", userID)
 				currentMessages = setInitialMessages(instructions, userID)
 			}
 
+			// Create a new slice for updated messages to avoid modifying the original slice in map directly during SendMessage
 			updatedMessages := make([]ChatCompletionMessage, len(currentMessages))
 			copy(updatedMessages, currentMessages)
 
 			updatedMessages = append(updatedMessages, ChatCompletionMessage{
 				Role:    ChatMessageRoleUser,
-				Content: parsedUserMsg,
+				Content: parsedUserMsg, // This is the full contextualized message
 			})
 
-			storage.SaveChatHistory(messages, chatFilepath)
-
-			aiResponseContent, err := SendMessage(client, &updatedMessages, Mybot)
+			// aiResponseContent contains the actual text reply from the LLM
+			aiResponseContent, err := SendMessage(client, &updatedMessages, Mybot) // updatedMessages is modified by SendMessage
 
 			if err != nil {
-				log.Printf("Error getting response from OpenRouter: %v", err)
-				if len(messages[userID]) > 0 {
-					messages[userID] = messages[userID][:len(messages[userID])-1]
-				}
+				log.Printf("ERROR: Error from SendMessage for UserID %s: %v", userID, err)
+				// Try to roll back the user's last message from history if an error occurs.
+				// messages[userID] at this point still holds the history *before* the problematic user message + AI response.
+				// So, if currentMessages was correctly snapshotting that, we can revert.
+				messages[userID] = currentMessages
+				go Mybot.RespondToMessage(channelID, "Sorry, I encountered an error processing your message. Please try again.", userInput.Message.Reference(), userInput.WaitMessage)
+				continue // Prevents saving potentially corrupted history (though SendMessage might have already added to updatedMessages)
 			}
 
+			// SendMessage has modified updatedMessages to include the user's prompt, tool interactions, and AI's final response.
 			messages[userID] = updatedMessages
 
-			// Trim messages
-			trimmed := trimMsg(messages[userID], MaxMessagesToKeep)
-			messages[userID] = trimmed
+			trimmedMessages := trimMsg(messages[userID], MaxMessagesToKeep)
+			messages[userID] = trimmedMessages
 
-			storage.SaveChatHistory(messages, chatFilepath)
+			if err := storage.SaveChatHistory(messages, chatFilepath); err != nil {
+				log.Printf("ERROR: Failed to save chat history for UserID %s: %v", userID, err)
+			} else {
+				log.Printf("INFO: Chat history saved for UserID %s.", userID)
+			}
 
-			log.Println("Response to user: " + aiResponseContent)
+			log.Printf("INFO: Response to UserID %s in ChannelID %s: \"%s\"", userID, channelID, aiResponseContent)
 
 			if len(aiResponseContent) > MaxMessageLength {
-				// Split the response into chunks of 1900 characters
+				log.Printf("INFO: AI response for UserID %s is long (%d chars), splitting.", userID, len(aiResponseContent))
 				chunks := SplitString(aiResponseContent, MaxMessageLength)
 				go Mybot.RespondToLongMessage(userInput.Message.ChannelID, chunks, userInput.Message.Reference(), userInput.WaitMessage)
 				continue
@@ -295,57 +331,56 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 	}
 }
 
-// Trim messages to a maximum length, only keeping the last maxMsg number of user messages
-func trimMsg(messages []ChatCompletionMessage, maxMsg int) []ChatCompletionMessage {
-	log.Printf("Trimming messages to a maximum of %d\n", maxMsg)
-
-	if len(messages) == 0 {
+// Trim messages to a maximum length, only keeping the last maxMsg number of *user* messages
+// and their associated assistant/tool messages.
+func trimMsg(messages []ChatCompletionMessage, maxUserMessagesToKeep int) []ChatCompletionMessage {
+	if len(messages) <= 1 { // Always keep the system message if it's the only one
 		return messages
 	}
 
-	fmt.Println("messages length: ", len(messages))
+	log.Printf("DEBUG: Trimming messages. Original length: %d. Max user messages to keep: %d.", len(messages), maxUserMessagesToKeep)
 
-	// Always preserve the first message (usually system message)
-	firstMsg := messages[0]
-	var temp []ChatCompletionMessage
-	userMsgCount := 0
+	firstMsg := messages[0] // Assume this is the system prompt
+	if firstMsg.Role != ChatMessageRoleSystem {
+		log.Printf("WARN: trimMsg: First message is not System role. Actual: %s. Trimming might behave unexpectedly.", firstMsg.Role)
+	}
 
-	// Iterate from the end backwards, skipping the first message
-	for i := len(messages) - 1; i >= 1; i-- {
-		// Check if we've reached the maximum user messages before adding
-		if messages[i].Role == ChatMessageRoleUser {
-			if userMsgCount >= maxMsg {
-				log.Println("Reached maximum number of user messages to keep.")
-				break
-			}
-			userMsgCount++
+	// We want to keep the system prompt + the interactions related to the last 'maxUserMessagesToKeep' user messages.
+	var userMessageIndices []int
+	for i, msg := range messages {
+		if msg.Role == ChatMessageRoleUser {
+			userMessageIndices = append(userMessageIndices, i)
 		}
-
-		temp = append(temp, messages[i])
 	}
 
-	// If no user messages were found, return original messages
-	if userMsgCount == 0 {
-		return messages
+	if len(userMessageIndices) <= maxUserMessagesToKeep {
+		log.Printf("DEBUG: No trimming needed, %d user messages found, less than or equal to max %d.", len(userMessageIndices), maxUserMessagesToKeep)
+		return messages // No trimming needed if user messages are within limit
 	}
 
-	// Reverse temp to restore chronological order
-	for j := 0; j < len(temp)/2; j++ {
-		temp[j], temp[len(temp)-1-j] = temp[len(temp)-1-j], temp[j]
-	}
+	// Determine the index of the (N-maxUserMessagesToKeep)-th user message. We keep messages from this point onwards.
+	// For example, if 5 user messages [u1, u2, u3, u4, u5] and max is 2, we keep u4 and u5.
+	// So, cutOffUserMessageIndex is index of u3. We take messages *after* u3's full interaction block.
+	// This is tricky because assistant responses and tool calls follow the user message.
+	// A simpler, though less precise way, is to find the start index of the (maxUserMessagesToKeep)-th user message from the end.
+	
+	startIndexForKeptHistory := userMessageIndices[len(userMessageIndices)-maxUserMessagesToKeep]
 
-	// Create result with first message at the beginning
-	result := make([]ChatCompletionMessage, 0, len(temp)+1)
-	result = append(result, firstMsg)
-	result = append(result, temp...)
+	log.Printf("DEBUG: Trimming: Keeping messages from index %d onwards (this is the %d-th user message from the end).", startIndexForKeptHistory, maxUserMessagesToKeep)
 
-	return result
+	trimmedHistory := make([]ChatCompletionMessage, 0)
+	trimmedHistory = append(trimmedHistory, firstMsg) // Add system prompt
+	trimmedHistory = append(trimmedHistory, messages[startIndexForKeptHistory:]...)
+
+	log.Printf("DEBUG: Messages trimmed from %d to %d items.", len(messages), len(trimmedHistory))
+	return trimmedHistory
 }
 
+
 func parseUserInput(userInput string) (parsed string, skip bool) {
-
+	// This function is simple and pure, extensive logging not typically needed here.
+	// Caller can log if 'skip' is true.
 	userInput = strings.TrimSpace(userInput)
-
 	if userInput == "" {
 		return "", true
 	}
@@ -353,11 +388,13 @@ func parseUserInput(userInput string) (parsed string, skip bool) {
 }
 
 func initRouter() map[string][]ChatCompletionMessage {
+	log.Printf("INFO: initRouter: Initializing new chat history map.")
 	messages := make(map[string][]ChatCompletionMessage)
 	return messages
 }
 
 func setInitialMessages(instructions string, userID string) []ChatCompletionMessage {
+	log.Printf("INFO: setInitialMessages: Setting initial system message for UserID %s.", userID)
 	return []ChatCompletionMessage{
 		{
 			Role:    ChatMessageRoleSystem,
