@@ -107,7 +107,7 @@ func CheckMusicPerm(s *discordgo.Session, guildID, channelID string) (allowed bo
 	return allowedJoin && allowedSpeak, nil
 }
 
-// FindVoiceChannel gets the appropriate voice channel for bot to join
+// FindVoiceChannel gets the appropriate voice channel for bot to join, returns the channelID if found.
 func FindVoiceChannel(s *discordgo.Session, guildID, userID string) (channelID string, err error) {
 	isInVoice, channelID, err := CheckUserVoiceChannel(s, guildID, userID)
 	if err != nil {
