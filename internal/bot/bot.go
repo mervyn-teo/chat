@@ -120,16 +120,29 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		m.Content = strings.ReplaceAll(m.Content, "<@"+s.State.User.ID+">", "@you")
 
-		if m.ReferencedMessage != nil {
-			referMsg := ""
-
-			if m.ReferencedMessage.Author.ID == s.State.User.ID {
-				referMsg = "you said: " + m.ReferencedMessage.Content
-			} else {
-				referMsg = m.ReferencedMessage.Author.ID + " said: " + m.ReferencedMessage.Content
+		/*
+			Message format:
+			{
+				"referenced_message"		: "The message content from the referenced message",
+				"referenced_message_author"	: "The ID of the author of the referenced message",
+				"message"					: "The content of the current message",
 			}
+		*/
 
-			m.Content = referMsg + "\n" + m.Author.ID + " says to you: " + m.Content
+		if m.ReferencedMessage != nil {
+			referMsg := fmt.Sprintf(
+				"{\n"+
+					"\"referenced_message\": \"%s\", \n"+
+					"\"referenced_message_author\": \"%s\"\n"+
+					"\"message\":\"%s\"\n"+
+					"}", m.ReferencedMessage.Content, m.ReferencedMessage.Author.ID, m.Content)
+			m.Content = referMsg
+		} else {
+			referMsg := fmt.Sprintf(
+				"{\n"+
+					"\"message\":\"%s\"\n"+
+					"}", m.Content)
+			m.Content = referMsg
 		}
 
 		fmt.Println("Message content: ", m.Content)

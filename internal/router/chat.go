@@ -239,9 +239,27 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				continue
 			}
 
+			/*
+				Mesaage format:
+				{
+					"userID"		: "1234567890",
+					"userName"		: "exampleUser",
+					"guildID"		: "0987654321",
+					"textchannelID"	: "1122334455",
+					"message" 		: "Hello, how are you?"
+				}
+
+			*/
+
 			userID := userInput.Message.Author.ID
 			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
-			parsedUserMsg = fmt.Sprintf("userID: %s, userName: %s said in guildID: %s, text channelID %s: %s", userID, userInput.Message.Author.Username, userInput.Message.GuildID, userInput.Message.ChannelID, parsedUserMsg)
+			parsedUserMsg = fmt.Sprintf("{\n"+
+				"\"userID\": \"%s\", \n"+
+				"\"userName\": \"%s\", \n"+
+				"\"guildID\": %s, \n"+
+				"\"textchannelID\" \"%s\", \n"+
+				"\"content\": \"%s\"\n"+
+				"}", userID, userInput.Message.Author.Username, userInput.Message.GuildID, userInput.Message.ChannelID, parsedUserMsg)
 
 			if isSkip {
 				continue
