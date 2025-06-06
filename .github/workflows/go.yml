@@ -46,6 +46,9 @@ jobs:
           test_voice_channel_id_2: ${{secrets.test_voice_channel_id_2}}
           test_voice_channel_id_3: ${{secrets.test_voice_channel_id_3}}
           youtube_cookie: ${{secrets.youtube_cookie}}
+          aws_access_key_id: ${{secrets.aws_access_key_id}}
+          aws_secret_access_key: ${{secrets.aws_secret_access_key}}
+          region: ${{secrets.region}}
           SKIP_YOUTUBE_TESTS: "true"
 
 
