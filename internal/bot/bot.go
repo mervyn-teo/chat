@@ -207,6 +207,7 @@ func (b *Bot) forgetMessage(msg MessageWithWait) {
 // RespondToMessage sends a message using the bot's session
 // This method is now part of the Bot struct
 func (b *Bot) RespondToMessage(channelId string, response string, ref *discordgo.MessageReference, waitMessage *discordgo.Message) {
+
 	if b.Session == nil {
 		log.Println("Error: Bot session not initialized in RespondToMessage")
 		return
@@ -232,6 +233,38 @@ func (b *Bot) RespondToMessage(channelId string, response string, ref *discordgo
 		log.Printf("Error sending message via RespondToMessage: %v", err)
 	}
 }
+
+// RespondInVC sends Text-To-Speech in a voice channel
+//func RespondInVC(b *Bot, ref *discordgo.MessageReference) {
+//	botUser, err := b.Session.User("@me")
+//	if err != nil {
+//		log.Printf("Error getting bot user: %v", err)
+//		return
+//	}
+//	channel, err := voiceChatUtils.FindVoiceChannel(b.Session, ref.GuildID, botUser.ID)
+//	if err != nil {
+//		return
+//	}
+//	vc, err := b.JoinVc(ref.GuildID, channel)
+//	if err != nil {
+//		return
+//	}
+//
+//	var stop <-chan bool
+//	var donePlaying chan<- bool
+//
+//	go voiceChatUtils.PlayAudioFile(vc, "output.mp3", stop, donePlaying)
+//
+//	switch {
+//	case <-stop:
+//		log.Println("Done playing audio file")
+//		err := vc.Disconnect()
+//		if err != nil {
+//			return
+//		}
+//
+//	}
+//}
 
 func (b *Bot) RespondToLongMessage(channelId string, response []string, ref *discordgo.MessageReference, waitMessage *discordgo.Message) {
 	if b.Session == nil {

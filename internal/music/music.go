@@ -17,6 +17,9 @@ import (
 	"sync"
 	"time"
 	"untitled/internal/bot"
+	"untitled/internal/voiceChatUtils"
+
+	//"untitled/internal/bot"
 	"untitled/internal/storage"
 )
 
@@ -217,7 +220,7 @@ func (s *SongList) PlaySong(gid string, cid string, myBot *bot.Bot, ytbCookie st
 	s.Mu.Unlock()
 
 	// Start playing the audio file
-	go PlayAudioFile(vc, filePath, stopper, donePlaying)
+	go voiceChatUtils.PlayAudioFile(vc, filePath, stopper, donePlaying)
 
 	// Monitor playback
 	go s.monitorPlayback(gid, cid, myBot, ytbCookie, vc, stopper, donePlaying)

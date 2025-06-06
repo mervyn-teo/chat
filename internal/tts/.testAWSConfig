@@ -1,0 +1,4 @@
+[default]
+aws_access_key_id = 12345678901234567890
+aws_secret_access_key = 098765432109876543210
+region = ap-southeast-2

@@ -2,4 +2,5 @@ settings.json
 chat_history.json
 reminders.json
 cookies.txt
+.aws-creds
 .env
