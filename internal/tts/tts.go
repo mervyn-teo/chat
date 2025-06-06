@@ -1,55 +1,35 @@
 package tts
 
 import (
-	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/polly"
 	"github.com/aws/aws-sdk-go-v2/service/polly/types"
 	_ "github.com/aws/aws-sdk-go-v2/service/polly/types"
+	"github.com/joho/godotenv"
 	"io"
 	"log"
 	"os"
-	"strings"
 	"untitled/internal/storage"
 )
 
-func LoadConfig(filepath string) aws.Config {
-	file, err := os.Open(filepath)
+func LoadConfig() aws.Config {
+
+	err := godotenv.Load("../../.env")
 	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-
-		}
-	}(file)
-
-	// Assuming the file contains AWS credentials in a format that can be parsed
-	var accessKey, secretKey, region string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "aws_access_key_id") {
-			accessKey = strings.Split(line, "=")[1]
-		} else if strings.HasPrefix(line, "aws_secret_access_key") {
-			secretKey = strings.Split(line, "=")[1]
-		} else if strings.HasPrefix(line, "region") {
-			region = strings.Split(line, "=")[1]
-		}
+		fmt.Printf("Error loading .env file: %v\n", err)
 	}
 
 	awsConfig := aws.Config{
 		Credentials: credentials.NewStaticCredentialsProvider(
-			strings.TrimSpace(accessKey),
-			strings.TrimSpace(secretKey),
+			os.Getenv("aws_access_key_id"),
+			os.Getenv("aws_secret_access_key"),
 			"",
 		),
-		Region: strings.TrimSpace(region),
+		Region: os.Getenv("region"),
 	}
 
 	return awsConfig

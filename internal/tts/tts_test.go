@@ -7,7 +7,7 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	t.Run("Non-empty config", func(t *testing.T) { // Load AWS configuration
-		awsConfig := LoadConfig(".testAWSConfig")
+		awsConfig := LoadConfig()
 		creds, err := awsConfig.Credentials.Retrieve(context.TODO())
 		if err != nil {
 			return
@@ -38,7 +38,7 @@ func TestLoadConfig(t *testing.T) {
 
 func TestTextToSpeech(t *testing.T) {
 	t.Run("Valid text input", func(t *testing.T) {
-		awsConfig := LoadConfig("../../.aws-creds")
+		awsConfig := LoadConfig()
 		err := TextToSpeech("Hello from project-local AWS config!", awsConfig)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
@@ -46,7 +46,7 @@ func TestTextToSpeech(t *testing.T) {
 	})
 
 	t.Run("Empty text input", func(t *testing.T) {
-		awsConfig := LoadConfig(".testAWSConfig")
+		awsConfig := LoadConfig()
 		err := TextToSpeech("", awsConfig)
 		if err == nil {
 			t.Fatal("Expected error for empty text input, got nil")
