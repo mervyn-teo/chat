@@ -221,18 +221,6 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 			IsForget:    &isForget,
 		})
 	case strings.HasPrefix(m.Content, "!start"):
-		// start transcription
-		refer, err := s.ChannelMessageSendReply(m.ChannelID, "Starting transcription...", m.Reference())
-		if err != nil {
-			log.Printf("Error sending ack for !start: %v", err)
-			return
-		}
-
-		_, err = s.ChannelMessageSendReply(refer.ChannelID, "Transcription started. You can now speak to the bot.", refer.Reference())
-		if err != nil {
-			return
-		}
-
 		if b.stopTranscribe == nil {
 			b.stopTranscribe = make(chan bool) // Initialize the stop channel
 		}
@@ -242,7 +230,18 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 
-		transcribe.StartTranscribe(b.Session, b.stopTranscribe, b.transcribeChannel)
+		ready := make(chan bool, 0)
+
+		go func() {
+			<-ready // Wait for the transcribe to be ready
+			_, err := s.ChannelMessageSendReply(m.ChannelID, "Transcription started. You can now speak to the bot.", m.Reference())
+			if err != nil {
+				return
+			}
+		}()
+
+		transcribe.StartTranscribe(b.Session, b.stopTranscribe, b.transcribeChannel, ready)
+
 	case strings.HasPrefix(m.Content, "!stop"):
 		// stop transcription
 		refer, err := s.ChannelMessageSendReply(m.ChannelID, "Stopping transcription...", m.Reference())

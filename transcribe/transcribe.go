@@ -496,7 +496,8 @@ func (vt *VoiceTranscriber) Close() {
 
 // StartTranscribe initializes the bot and starts the transcriber
 // b is the bot instance, stop is a channel to signal shutdown
-func StartTranscribe(session *discordgo.Session, stop chan bool, messageChannel chan *Msg) {
+// ready is a channel to signal that the bot is ready
+func StartTranscribe(session *discordgo.Session, stop chan bool, messageChannel chan *Msg, ready chan bool) {
 	// Get configuration from environment variables for security
 	// Use environment variables for sensitive data
 	err := godotenv.Load(".env")
@@ -521,6 +522,7 @@ func StartTranscribe(session *discordgo.Session, stop chan bool, messageChannel 
 	}
 
 	log.Println("Bot is running. Press Ctrl+C to stop.")
+	ready <- true
 	<-stop
 
 	// Clean shutdown
