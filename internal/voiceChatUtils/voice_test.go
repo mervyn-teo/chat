@@ -1,4 +1,4 @@
-package voiceChatUtils
+package voiceChatUtils_test
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"untitled/internal/bot"
 	"untitled/internal/storage"
 	"untitled/internal/tts"
+	"untitled/internal/voiceChatUtils"
 )
 
 var (
@@ -68,7 +69,7 @@ func TestGetVoiceChannel(t *testing.T) {
 	guildID := os.Getenv("test_guild_id")
 
 	validVCids := []string{os.Getenv("test_voice_channel_id"), os.Getenv("test_voice_channel_id_2")}
-	VCids, err := GetVoiceChannel(myBot.Session, guildID)
+	VCids, err := voiceChatUtils.GetVoiceChannel(myBot.Session, guildID)
 	if err != nil {
 		return
 	}
@@ -85,7 +86,7 @@ func TestCheckJoinPermission(t *testing.T) {
 	VCid := os.Getenv("test_voice_channel_id")
 
 	// Check if the bot has permission to join the voice channel
-	allowed, err := CheckJoinPermission(myBot.Session, guildID, VCid)
+	allowed, err := voiceChatUtils.CheckJoinPermission(myBot.Session, guildID, VCid)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -100,7 +101,7 @@ func TestCheckVoicePermission(t *testing.T) {
 	VCid := os.Getenv("test_voice_channel_id")
 
 	// Check if the bot has permission to speak in the voice channel
-	allowed, err := CheckVoicePermission(myBot.Session, guildID, VCid)
+	allowed, err := voiceChatUtils.CheckVoicePermission(myBot.Session, guildID, VCid)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -115,7 +116,7 @@ func TestCheckJoinPermissionDenied(t *testing.T) {
 	VCid := os.Getenv("test_voice_channel_id_3")
 
 	// Check if the bot has permission to join the voice channel
-	allowed, err := CheckJoinPermission(myBot.Session, guildID, VCid)
+	allowed, err := voiceChatUtils.CheckJoinPermission(myBot.Session, guildID, VCid)
 	if err != nil {
 		log.Println(err)
 	}
@@ -130,7 +131,7 @@ func TestCheckVoicePermissionDenied(t *testing.T) {
 	VCid := os.Getenv("test_voice_channel_id_3")
 
 	// Check if the bot has permission to speak in the voice channel
-	allowed, err := CheckVoicePermission(myBot.Session, guildID, VCid)
+	allowed, err := voiceChatUtils.CheckVoicePermission(myBot.Session, guildID, VCid)
 	if err == nil {
 		t.Errorf("Expected error, got nil")
 	}
@@ -146,7 +147,7 @@ func TestCheckUserVoiceChannel(t *testing.T) {
 		return
 	}
 
-	isInVoiceChannel, channelID, err := CheckUserVoiceChannel(myBot.Session, os.Getenv("test_guild_id"), myBot.Session.State.User.ID)
+	isInVoiceChannel, channelID, err := voiceChatUtils.CheckUserVoiceChannel(myBot.Session, os.Getenv("test_guild_id"), myBot.Session.State.User.ID)
 	if err != nil {
 		return
 	}
@@ -179,7 +180,7 @@ func TestCheckUserVoiceChannelNoUser(t *testing.T) {
 		}
 	}
 
-	isInVoiceChannel, channelID, err := CheckUserVoiceChannel(myBot.Session, os.Getenv("test_guild_id"), myBot.Session.State.User.ID)
+	isInVoiceChannel, channelID, err := voiceChatUtils.CheckUserVoiceChannel(myBot.Session, os.Getenv("test_guild_id"), myBot.Session.State.User.ID)
 	if err != nil {
 		return
 	}
@@ -194,7 +195,7 @@ func TestCheckUserVoiceChannelNoUser(t *testing.T) {
 }
 
 func TestCheckMusicPerm(t *testing.T) {
-	allowed, err := CheckMusicPerm(myBot.Session, os.Getenv("test_guild_id"), os.Getenv("test_voice_channel_id"))
+	allowed, err := voiceChatUtils.CheckMusicPerm(myBot.Session, os.Getenv("test_guild_id"), os.Getenv("test_voice_channel_id"))
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -204,7 +205,7 @@ func TestCheckMusicPerm(t *testing.T) {
 }
 
 func TestCheckMusicPermDenied(t *testing.T) {
-	allowed, err := CheckMusicPerm(myBot.Session, os.Getenv("test_guild_id"), os.Getenv("test_voice_channel_id_3"))
+	allowed, err := voiceChatUtils.CheckMusicPerm(myBot.Session, os.Getenv("test_guild_id"), os.Getenv("test_voice_channel_id_3"))
 	if err == nil {
 		t.Errorf("Expected error, got nil")
 	}
@@ -219,7 +220,7 @@ func TestFindVoiceChannelWithUser(t *testing.T) {
 		return
 	}
 
-	channelId, err := FindVoiceChannel(myBot.Session, os.Getenv("test_guild_id"), myBot.Session.State.User.ID)
+	channelId, err := voiceChatUtils.FindVoiceChannel(myBot.Session, os.Getenv("test_guild_id"), myBot.Session.State.User.ID)
 
 	if err != nil {
 		return
@@ -245,7 +246,7 @@ func TestFindVoiceChannelNoUser(t *testing.T) {
 		}
 	}
 
-	channelId, err := FindVoiceChannel(myBot.Session, os.Getenv("test_guild_id"), myBot.Session.State.User.ID)
+	channelId, err := voiceChatUtils.FindVoiceChannel(myBot.Session, os.Getenv("test_guild_id"), myBot.Session.State.User.ID)
 
 	if err != nil {
 		return
