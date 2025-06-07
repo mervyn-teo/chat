@@ -445,7 +445,7 @@ func (vt *VoiceTranscriber) handleTranscription(text string) {
 					VC:      vt.voiceConn,
 				}
 
-				log.Printf("Transcription message created: %s", transcribeMessage)
+				log.Printf("Transcription message created")
 				// Send the message to the router via the channel
 				vt.msgChan <- transcribeMessage
 				vt.msgForRouter = "" // Clear the message after sending
