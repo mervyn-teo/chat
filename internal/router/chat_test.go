@@ -479,7 +479,7 @@ func TestMessageLoop(t *testing.T) {
 	defer cancel()
 
 	// Create message channel
-	messageChannel := make(chan *bot.MessageWithWait, 10)
+	messageChannel := make(chan *bot.MessageForCompletion, 10)
 
 	// Initialize messages map
 	messages := make(map[string][]ChatCompletionMessage)
@@ -488,7 +488,7 @@ func TestMessageLoop(t *testing.T) {
 	go MessageLoop(ctx, &bot.Bot{}, client, messageChannel, "Test instructions", messages, tempChatFile.Name())
 
 	// Test normal message
-	testMessage := &bot.MessageWithWait{
+	testMessage := &bot.MessageForCompletion{
 		Message: &discordgo.MessageCreate{
 			Message: &discordgo.Message{
 				Author: &discordgo.User{
@@ -512,7 +512,7 @@ func TestMessageLoop(t *testing.T) {
 	}
 
 	// Test forget command
-	forgetMessage := &bot.MessageWithWait{
+	forgetMessage := &bot.MessageForCompletion{
 		Message: &discordgo.MessageCreate{
 			Message: &discordgo.Message{
 				Author: &discordgo.User{

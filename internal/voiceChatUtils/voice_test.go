@@ -9,11 +9,12 @@ import (
 	"time"
 	"untitled/internal/bot"
 	"untitled/internal/storage"
+	"untitled/internal/tts"
 )
 
 var (
 	myBot          *bot.Bot
-	messageChannel chan *bot.MessageWithWait
+	messageChannel chan *bot.MessageForCompletion
 )
 
 func TestMain(m *testing.M) {
@@ -37,8 +38,11 @@ func setup() {
 		YoutubeToken: os.Getenv("youtube_api_key"),
 	}
 
-	messageChannel = make(chan *bot.MessageWithWait)
-	myBot, err = bot.NewBot(settings.DiscordToken, messageChannel)
+	messageChannel = make(chan *bot.MessageForCompletion)
+	// tts routine
+	awsConf := tts.LoadConfig()
+
+	myBot, err = bot.NewBot(settings.DiscordToken, messageChannel, awsConf)
 
 	if err != nil {
 		panic("Failed to create bot: " + err.Error())
