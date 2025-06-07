@@ -4,15 +4,20 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"untitled/internal/tts"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
 )
 
 // Test helper functions that work with the actual bot structure
-func createTestBot(t *testing.T) (*Bot, chan *MessageWithWait) {
-	msgChan := make(chan *MessageWithWait, 10)
-	bot, err := NewBot("test-token", msgChan)
+func createTestBot(t *testing.T) (*Bot, chan *MessageForCompletion) {
+	msgChan := make(chan *MessageForCompletion, 10)
+
+	// tts routine
+	awsConf := tts.LoadConfig()
+
+	bot, err := NewBot("test-token", msgChan, awsConf)
 	assert.NoError(t, err)
 
 	// Create a real session but don't open it
@@ -50,9 +55,13 @@ func createMessageReference() *discordgo.MessageReference {
 }
 
 // Mock the session for testing by creating a test session with proper state
-func createTestBotWithMockState(t *testing.T) (*Bot, chan *MessageWithWait) {
-	msgChan := make(chan *MessageWithWait, 10)
-	bot, err := NewBot("test-token", msgChan)
+func createTestBotWithMockState(t *testing.T) (*Bot, chan *MessageForCompletion) {
+	msgChan := make(chan *MessageForCompletion, 10)
+
+	// tts routine
+	awsConf := tts.LoadConfig()
+
+	bot, err := NewBot("test-token", msgChan, awsConf)
 	assert.NoError(t, err)
 
 	// Create a session with proper state for testing
@@ -73,8 +82,12 @@ func createTestBotWithMockState(t *testing.T) (*Bot, chan *MessageWithWait) {
 // Test NewBot function
 func TestNewBot(t *testing.T) {
 	t.Run("successful creation", func(t *testing.T) {
-		msgChan := make(chan *MessageWithWait, 10)
-		bot, err := NewBot("test-token", msgChan)
+		msgChan := make(chan *MessageForCompletion, 10)
+
+		// tts routine
+		awsConf := tts.LoadConfig()
+
+		bot, err := NewBot("test-token", msgChan, awsConf)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, bot)
@@ -84,8 +97,12 @@ func TestNewBot(t *testing.T) {
 	})
 
 	t.Run("empty token", func(t *testing.T) {
-		msgChan := make(chan *MessageWithWait, 10)
-		bot, err := NewBot("", msgChan)
+		msgChan := make(chan *MessageForCompletion, 10)
+
+		// tts routine
+		awsConf := tts.LoadConfig()
+
+		bot, err := NewBot("", msgChan, awsConf)
 
 		// Bot creation should still succeed even with empty token
 		assert.NoError(t, err)
@@ -93,7 +110,10 @@ func TestNewBot(t *testing.T) {
 	})
 
 	t.Run("nil channel", func(t *testing.T) {
-		bot, err := NewBot("test-token", nil)
+		// tts routine
+		awsConf := tts.LoadConfig()
+
+		bot, err := NewBot("test-token", nil, awsConf)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, bot)
@@ -205,7 +225,7 @@ func TestBot_addMessage(t *testing.T) {
 		bot, _ := createTestBot(t)
 
 		isForget := false
-		msg := MessageWithWait{
+		msg := MessageForCompletion{
 			Message: &discordgo.MessageCreate{
 				Message: &discordgo.Message{ID: "test-id"},
 			},
@@ -224,7 +244,7 @@ func TestBot_addMessage(t *testing.T) {
 
 		for i := 0; i < 5; i++ {
 			isForget := false
-			msg := MessageWithWait{
+			msg := MessageForCompletion{
 				Message: &discordgo.MessageCreate{
 					Message: &discordgo.Message{ID: "test-id-" + string(rune(i+'0'))},
 				},
@@ -243,7 +263,7 @@ func TestBot_forgetMessage(t *testing.T) {
 
 		// Add multiple messages from different users and channels
 		isForget := false
-		msg1 := MessageWithWait{
+		msg1 := MessageForCompletion{
 			Message: &discordgo.MessageCreate{
 				Message: &discordgo.Message{
 					ID:        "msg1",
@@ -253,7 +273,7 @@ func TestBot_forgetMessage(t *testing.T) {
 			},
 			IsForget: &isForget,
 		}
-		msg2 := MessageWithWait{
+		msg2 := MessageForCompletion{
 			Message: &discordgo.MessageCreate{
 				Message: &discordgo.Message{
 					ID:        "msg2",
@@ -263,7 +283,7 @@ func TestBot_forgetMessage(t *testing.T) {
 			},
 			IsForget: &isForget,
 		}
-		msg3 := MessageWithWait{
+		msg3 := MessageForCompletion{
 			Message: &discordgo.MessageCreate{
 				Message: &discordgo.Message{
 					ID:        "msg3",
@@ -279,7 +299,7 @@ func TestBot_forgetMessage(t *testing.T) {
 		bot.addMessage(msg3)
 
 		// Forget messages from user1 in channel1
-		forgetMsg := MessageWithWait{
+		forgetMsg := MessageForCompletion{
 			Message: &discordgo.MessageCreate{
 				Message: &discordgo.Message{
 					Author:    &discordgo.User{ID: "user1"},
@@ -317,7 +337,7 @@ func TestBot_forgetMessage(t *testing.T) {
 	t.Run("forget with empty queue", func(t *testing.T) {
 		bot, _ := createTestBot(t)
 
-		forgetMsg := MessageWithWait{
+		forgetMsg := MessageForCompletion{
 			Message: &discordgo.MessageCreate{
 				Message: &discordgo.Message{
 					Author:    &discordgo.User{ID: "user1"},
@@ -432,7 +452,7 @@ func TestBot_VoiceConnectionMethods(t *testing.T) {
 
 		// Should handle gracefully without panicking
 		assert.NotPanics(t, func() {
-			bot.LeaveVC("guild-id", "channel-id")
+			bot.LeaveVC("guild-id")
 		})
 	})
 
@@ -441,7 +461,7 @@ func TestBot_VoiceConnectionMethods(t *testing.T) {
 
 		// Should handle gracefully when no connections exist
 		assert.NotPanics(t, func() {
-			bot.LeaveVC("guild-id", "channel-id")
+			bot.LeaveVC("guild-id")
 		})
 	})
 }
@@ -453,7 +473,7 @@ func TestBot_relayMessagesToRouter(t *testing.T) {
 
 		// Add a message to the queue
 		isForget := false
-		testMsg := MessageWithWait{
+		testMsg := MessageForCompletion{
 			Message: &discordgo.MessageCreate{
 				Message: &discordgo.Message{ID: "test-id"},
 			},
@@ -507,7 +527,7 @@ func TestBot_relayMessagesToRouter(t *testing.T) {
 		messageCount := 3
 		for i := 0; i < messageCount; i++ {
 			isForget := false
-			testMsg := MessageWithWait{
+			testMsg := MessageForCompletion{
 				Message: &discordgo.MessageCreate{
 					Message: &discordgo.Message{ID: "test-id-" + string(rune(i+'0'))},
 				},
@@ -572,7 +592,7 @@ func TestBot_ConcurrentAccess(t *testing.T) {
 				defer wg.Done()
 				for j := 0; j < messagesPerGoroutine; j++ {
 					isForget := false
-					msg := MessageWithWait{
+					msg := MessageForCompletion{
 						Message: &discordgo.MessageCreate{
 							Message: &discordgo.Message{
 								ID: "msg-" + string(rune(id+'0')) + "-" + string(rune(j+'0')),
@@ -603,7 +623,7 @@ func TestBot_ConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < 50; i++ {
 				isForget := false
-				msg := MessageWithWait{
+				msg := MessageForCompletion{
 					Message: &discordgo.MessageCreate{
 						Message: &discordgo.Message{
 							ID:        "msg-" + string(rune(i+'0')),
@@ -623,7 +643,7 @@ func TestBot_ConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			time.Sleep(25 * time.Millisecond) // Let some messages be added first
-			forgetMsg := MessageWithWait{
+			forgetMsg := MessageForCompletion{
 				Message: &discordgo.MessageCreate{
 					Message: &discordgo.Message{
 						Author:    &discordgo.User{ID: "user1"},
@@ -727,7 +747,7 @@ func BenchmarkBot_addMessage(b *testing.B) {
 	bot, _ := createTestBot(&testing.T{})
 
 	isForget := false
-	msg := MessageWithWait{
+	msg := MessageForCompletion{
 		Message: &discordgo.MessageCreate{
 			Message: &discordgo.Message{ID: "test-id"},
 		},
@@ -746,7 +766,7 @@ func BenchmarkBot_forgetMessage(b *testing.B) {
 	// Pre-populate with messages
 	for i := 0; i < 1000; i++ {
 		isForget := false
-		msg := MessageWithWait{
+		msg := MessageForCompletion{
 			Message: &discordgo.MessageCreate{
 				Message: &discordgo.Message{
 					ID:        "msg-" + string(rune(i)),
@@ -759,7 +779,7 @@ func BenchmarkBot_forgetMessage(b *testing.B) {
 		bot.addMessage(msg)
 	}
 
-	forgetMsg := MessageWithWait{
+	forgetMsg := MessageForCompletion{
 		Message: &discordgo.MessageCreate{
 			Message: &discordgo.Message{
 				Author:    &discordgo.User{ID: "user1"},
@@ -781,7 +801,7 @@ func TestBot_Integration(t *testing.T) {
 
 		// Simulate adding a message that would trigger bot response
 		isForget := false
-		testMsg := MessageWithWait{
+		testMsg := MessageForCompletion{
 			Message: &discordgo.MessageCreate{
 				Message: &discordgo.Message{
 					ID:        "test-msg-id",

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"untitled/internal/tts"
 
 	"github.com/joho/godotenv"
 	"github.com/sashabaranov/go-openai"
@@ -21,7 +22,7 @@ import (
 type MusicTestSuite struct {
 	suite.Suite
 	bot            *bot.Bot
-	messageChannel chan *bot.MessageWithWait
+	messageChannel chan *bot.MessageForCompletion
 	songMap        map[string]map[string]*music.SongList
 	testGuildID    string
 	testChannelID  string
@@ -63,10 +64,13 @@ func (suite *MusicTestSuite) setupBot() {
 
 	require.NotEmpty(suite.T(), settings.DiscordToken, "discord_bot_token must be set")
 
-	suite.messageChannel = make(chan *bot.MessageWithWait, 10)
+	suite.messageChannel = make(chan *bot.MessageForCompletion, 10)
 
 	var err error
-	suite.bot, err = bot.NewBot(settings.DiscordToken, suite.messageChannel)
+	// tts routine
+	awsConf := tts.LoadConfig()
+
+	suite.bot, err = bot.NewBot(settings.DiscordToken, suite.messageChannel, awsConf)
 	require.NoError(suite.T(), err, "Failed to create bot")
 
 	// Start bot in goroutine
