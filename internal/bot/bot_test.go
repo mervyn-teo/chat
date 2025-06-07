@@ -452,7 +452,7 @@ func TestBot_VoiceConnectionMethods(t *testing.T) {
 
 		// Should handle gracefully without panicking
 		assert.NotPanics(t, func() {
-			bot.LeaveVC("guild-id", "channel-id")
+			bot.LeaveVC("guild-id")
 		})
 	})
 
@@ -461,7 +461,7 @@ func TestBot_VoiceConnectionMethods(t *testing.T) {
 
 		// Should handle gracefully when no connections exist
 		assert.NotPanics(t, func() {
-			bot.LeaveVC("guild-id", "channel-id")
+			bot.LeaveVC("guild-id")
 		})
 	})
 }
