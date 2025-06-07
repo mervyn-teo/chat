@@ -254,7 +254,12 @@ func (vt *VoiceTranscriber) saveAsWAV(filename string, audioData []int16) error 
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+
+		}
+	}(file)
 
 	// WAV header calculations
 	dataSize := uint32(len(audioData) * 2)
@@ -480,7 +485,10 @@ func (vt *VoiceTranscriber) Close() {
 
 	// Disconnect from voice channel
 	if vt.voiceConn != nil {
-		vt.voiceConn.Disconnect()
+		err := vt.voiceConn.Disconnect()
+		if err != nil {
+			return
+		}
 	}
 
 	// Clean up speakers map
@@ -497,7 +505,7 @@ func (vt *VoiceTranscriber) Close() {
 // StartTranscribe initializes the bot and starts the transcriber
 // b is the bot instance, stop is a channel to signal shutdown
 // ready is a channel to signal that the bot is ready
-func StartTranscribe(session *discordgo.Session, stop chan bool, messageChannel chan *Msg, ready chan bool) {
+func StartTranscribe(session *discordgo.Session, stop chan bool, messageChannel chan *Msg, ready chan bool, GID string, voiceChannel string) {
 	// Get configuration from environment variables for security
 	// Use environment variables for sensitive data
 	err := godotenv.Load(".env")
@@ -505,8 +513,8 @@ func StartTranscribe(session *discordgo.Session, stop chan bool, messageChannel 
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 
-	guildID := os.Getenv("test_guild_id")
-	channelID := os.Getenv("test_voice_channel_id")
+	guildID := GID
+	channelID := voiceChannel
 
 	if messageChannel == nil {
 		log.Fatal("Message channel cannot be nil")

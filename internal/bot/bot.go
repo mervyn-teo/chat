@@ -240,7 +240,13 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 		}()
 
-		transcribe.StartTranscribe(b.Session, b.stopTranscribe, b.transcribeChannel, ready)
+		GID := m.GuildID
+		voiceChannel, err := voiceChatUtils.FindVoiceChannel(b.Session, GID, s.State.User.ID)
+		if err != nil {
+			return
+		}
+
+		transcribe.StartTranscribe(b.Session, b.stopTranscribe, b.transcribeChannel, ready, GID, voiceChannel)
 
 	case strings.HasPrefix(m.Content, "!stop"):
 		// stop transcription
@@ -514,7 +520,7 @@ func (b *Bot) JoinVC(guildID string, channelID string) (*discordgo.VoiceConnecti
 	return vc, nil
 }
 
-func (b *Bot) LeaveVC(guildID string, channelID string) {
+func (b *Bot) LeaveVC(guildID string) {
 	currSession := b.Session
 
 	if currSession == nil {
