@@ -122,7 +122,7 @@ func setUpSettings(filepath string) {
 	}
 
 	// read from example settings file
-	exampleFile, err := os.ReadFile("settings.json.example")
+	exampleFile, err := os.ReadFile("settings.example.json")
 
 	if err != nil {
 		fmt.Printf("Error reading example settings file: %v\n", err)

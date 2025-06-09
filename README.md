@@ -62,3 +62,4 @@ You can ask the chatbot to do the following for you:
 - Scheduling reminders
 - Get current news
 - Find YouTube videos
+- Play music from YouTube in the voice channel (requires the bot to have permission to join and speak in the voice channel)
