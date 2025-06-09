@@ -6,6 +6,19 @@ Discord chatbot with AI integration using OpenRouter API.
 This bot is designed to provide a seamless chat experience by leveraging the power of AI to generate responses to user queries.
 This bot can execute functions that users have declared.  
 
+# Prerequisites
+## Essential
+- Go 1.20 or later
+- A Discord app token (bot token)
+- OpenRouter API key
+
+## Optional
+- News API key (for fetching current news)
+- YouTube API key (for fetching YouTube videos and playing music)
+- [FFmpeg](https://ffmpeg.org/) (for playing music in voice channels)
+- [Yt-dlp](https://github.com/yt-dlp/yt-dlp) (for downloading YouTube videos to play in voice channels)
+- [YouTube cookies](https://www.reddit.com/r/youtubedl/wiki/cookies/) (for downloading YouTube videos that require age verification or are region-locked, if you plan to run this bot on AWS or any other mainstream cloud provider, you will need to use a cookie to access YouTube videos that require age verification or are region-locked)
+
 # Installation
 **1. Clone the repository**
 ```bash
