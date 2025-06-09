@@ -41,7 +41,7 @@ type videoInfo struct {
 }
 
 var (
-	ytdlp string = "yt-dlp"
+	ytdlp = "yt-dlp"
 )
 
 func getPlatform() string {
@@ -79,6 +79,7 @@ func executeCommand(cmd *exec.Cmd) (output []byte, err error) {
 
 // checkYtdlp checks if the platform is Windows and sets the ytdlp variable accordingly.
 func checkYtdlp() {
+	log.Printf("Checking yt-dlp installation for platform: %s", getPlatform())
 	if getPlatform() == "windows" {
 		ytdlp = "yt-dlp.exe"
 	}

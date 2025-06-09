@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"untitled/internal/voiceChatUtils"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 	MAGIC_KEYWORD_START = "hello" // Example keyword to trigger transcription
 	MAGIC_KEYWORD_END   = "bye"   // Example keyword to stop transcription
 	SPECIAL_USER_ID     = "10086" // This is a special user ID, representing a generic user in the voice channel
+	TIME_INTERVAL       = 3       // Interval for processing audio
 )
 
 // Global speakers map for opus decoders (following discordgo example)
@@ -32,37 +34,40 @@ type Msg struct {
 }
 
 type VoiceTranscriber struct {
-	session      *discordgo.Session
-	guildID      string
-	channelID    string
-	voiceConn    *discordgo.VoiceConnection
-	ctx          context.Context
-	cancel       context.CancelFunc
-	audioBuffer  []int16
-	bufferMutex  sync.Mutex
-	whisperPath  string
-	modelPath    string
-	pcmChan      chan *discordgo.Packet
-	msgForRouter string
-	isRecording  bool // Flag to track if transcription is active
-	msgChan      chan *Msg
+	session               *discordgo.Session
+	guildID               string
+	channelID             string
+	voiceConn             *discordgo.VoiceConnection
+	ctx                   context.Context
+	cancel                context.CancelFunc
+	audioBuffer           []int16
+	bufferMutex           sync.Mutex
+	whisperPath           string
+	modelPath             string
+	pcmChan               chan *discordgo.Packet
+	msgForRouter          string
+	isRecording           bool // Flag to track if transcription is active
+	msgChan               chan *Msg
+	keepAlive             chan bool
+	stopCurrTranscription chan bool // Channel to stop current transcription
 }
 
 func NewVoiceTranscriber(session *discordgo.Session, guildID, channelID string, transcibeChan chan *Msg) *VoiceTranscriber {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &VoiceTranscriber{
-		guildID:     guildID,
-		channelID:   channelID,
-		ctx:         ctx,
-		cancel:      cancel,
-		audioBuffer: make([]int16, 0),
-		pcmChan:     make(chan *discordgo.Packet, 100),
-		session:     session,
-		// Update these paths to match your system
-		whisperPath: "./whisper.cpp/build/bin/whisper-cli",
-		modelPath:   "./whisper.cpp/models/ggml-base.en.bin",
-		isRecording: false, // Initially not recording
-		msgChan:     transcibeChan,
+		guildID:               guildID,
+		channelID:             channelID,
+		ctx:                   ctx,
+		cancel:                cancel,
+		audioBuffer:           make([]int16, 0),
+		pcmChan:               make(chan *discordgo.Packet, 100),
+		session:               session,
+		whisperPath:           "./whisper.cpp/build/bin/whisper-cli",
+		modelPath:             "./whisper.cpp/models/ggml-base.en.bin",
+		isRecording:           false, // Initially not recording
+		msgChan:               transcibeChan,
+		keepAlive:             make(chan bool), // Keep the transcriber alive
+		stopCurrTranscription: make(chan bool), // Channel to stop current transcription
 	}
 }
 
@@ -166,10 +171,16 @@ func (vt *VoiceTranscriber) Connect() error {
 }
 
 func (vt *VoiceTranscriber) processAudioPeriodically() {
-	ticker := time.NewTicker(5 * time.Second) // Process every 5 seconds
+	ticker := time.NewTicker(200 * time.Millisecond) // Process every half a second to improve responsiveness
 	defer ticker.Stop()
 
 	for {
+		if vt.isRecording {
+			ticker.Reset(TIME_INTERVAL * time.Second) // if recording Process every 5 seconds
+		} else {
+			ticker.Reset(500 * time.Millisecond) // if not recording Process every half a second
+		}
+
 		select {
 		case <-vt.ctx.Done():
 			return
@@ -241,8 +252,7 @@ func (vt *VoiceTranscriber) transcribeAudioBuffer(audioData []int16) {
 	text := strings.TrimSpace(string(output))
 	// Filter out common noise/silence indicators
 	if text != "" &&
-		text != "[BLANK_AUDIO]" &&
-		!strings.Contains(strings.ToLower(text), "thank you") && // Common whisper hallucination
+		text != "[BLANK_AUDIO]" && // Common whisper hallucination
 		len(text) > 3 {
 		log.Printf("Transcription: %s", text)
 		vt.handleTranscription(text)
@@ -367,7 +377,7 @@ func (vt *VoiceTranscriber) handleTranscription(text string) {
 
 	log.Println("Transcription received:", text)
 	// both keywords are mentioned
-	if strings.Contains(strings.ToLower(text), MAGIC_KEYWORD_START) && strings.Contains(strings.ToLower(text), MAGIC_KEYWORD_END) {
+	if strings.Contains(strings.ToLower(text), MAGIC_KEYWORD_START) && strings.Contains(strings.ToLower(text), MAGIC_KEYWORD_END) && !vt.isRecording {
 		log.Println("Both start and end keywords found.")
 		vt.msgForRouter = strings.Split(strings.ToLower(text), MAGIC_KEYWORD_START)[1] // Get text after start keyword
 		vt.msgForRouter = strings.Split(vt.msgForRouter, MAGIC_KEYWORD_END)[0]         // Get text before end keyword
@@ -408,11 +418,81 @@ func (vt *VoiceTranscriber) handleTranscription(text string) {
 			vt.msgForRouter = "" // Clear the message after sending
 		}
 	} else if strings.Contains(strings.ToLower(text), MAGIC_KEYWORD_START) {
-		// Start recording transcription
-		log.Println("Start recording transcription...")
-		vt.isRecording = true
-		vt.msgForRouter = strings.Split(strings.ToLower(text), MAGIC_KEYWORD_START)[1] // Get text after start keyword
+		if !vt.isRecording {
+			// make a go routine that counts 5 seconds and if no text is received, it will stop recording
+			go keepAlive(vt, vt.stopCurrTranscription)
+			go func() {
+				// Wait for the stop signal to stop recording
+				<-vt.stopCurrTranscription
+				log.Println("Stop recording transcription due to timeout.")
+				if vt.isRecording {
+					vt.isRecording = false
+					// play the jingle
+					tempStopChan := make(chan bool)
+					tempDoneChan := make(chan bool)
+					go voiceChatUtils.PlayAudioFile(vt.voiceConn, "sfx/end_confirm.wav", tempStopChan, tempDoneChan)
+					go func() {
+						// Wait for the jingle to finish playing
+						<-tempDoneChan
+						log.Println("Jingle finished playing, sending transcription to router.")
+						close(tempStopChan)
+						close(tempDoneChan)
+					}()
 
+					if vt.msgForRouter != "" {
+						log.Printf("Sending recorded transcription to router: %s", vt.msgForRouter)
+
+						// Create a new Discord message with the transcription
+						vt.msgForRouter = strings.TrimSpace(vt.msgForRouter) // Clean up any leading/trailing spaces
+						if vt.msgForRouter == "" {
+							log.Println("No transcription recorded, skipping message send.")
+							return
+						}
+						vt.msgForRouter = strings.ReplaceAll(vt.msgForRouter, "\n", " ") // Replace newlines with spaces
+						vt.msgForRouter = strings.TrimSpace(vt.msgForRouter)             // Clean up any leading/trailing spaces
+
+						// Create a new Discord message
+						specialUser := discordgo.User{
+							ID:       SPECIAL_USER_ID,
+							Username: "SpecialGenericVoiceChatUser",
+						}
+
+						message := &discordgo.Message{
+							Content:   vt.msgForRouter,
+							ChannelID: vt.channelID, // Use the voice channel ID for sending messages
+						}
+						message.Author = &specialUser
+
+						// Create a transcribe message to send to the router
+						transcribeMessage := &Msg{
+							Message: message,
+							VC:      vt.voiceConn,
+						}
+
+						log.Printf("Transcription message created: %s", vt.msgForRouter)
+						// Send the message to the router via the channel
+						vt.msgChan <- transcribeMessage
+						vt.msgForRouter = "" // Clear the message after sending
+					}
+				}
+			}()
+
+			// Start recording transcription
+			log.Println("Start recording transcription...")
+			vt.isRecording = true
+			// play the jingle
+			tempStopChan := make(chan bool)
+			tempDoneChan := make(chan bool)
+			go voiceChatUtils.PlayAudioFile(vt.voiceConn, "sfx/comfirmation.mp3", tempStopChan, tempDoneChan)
+			go func() {
+				// Wait for the jingle to finish playing
+				<-tempDoneChan
+				log.Println("Jingle finished playing, sending transcription to router.")
+				close(tempStopChan)
+				close(tempDoneChan)
+			}()
+			vt.msgForRouter = strings.Split(strings.ToLower(text), MAGIC_KEYWORD_START)[1] // Get text after start keyword
+		}
 	} else if strings.Contains(strings.ToLower(text), MAGIC_KEYWORD_END) {
 		vt.msgForRouter = vt.msgForRouter + " " + strings.Split(strings.ToLower(text), MAGIC_KEYWORD_END)[0] // Get text before end keyword
 		if vt.isRecording {
@@ -420,6 +500,19 @@ func (vt *VoiceTranscriber) handleTranscription(text string) {
 			// Stop recording transcription
 			vt.isRecording = false
 			// Send the recorded transcription to the router
+
+			// play the jingle
+			tempStopChan := make(chan bool)
+			tempDoneChan := make(chan bool)
+			go voiceChatUtils.PlayAudioFile(vt.voiceConn, "sfx/end_confirm.wav", tempStopChan, tempDoneChan)
+			go func() {
+				// Wait for the jingle to finish playing
+				<-tempDoneChan
+				log.Println("Jingle finished playing, sending transcription to router.")
+				close(tempStopChan)
+				close(tempDoneChan)
+			}()
+
 			if vt.msgForRouter != "" {
 				log.Printf("Sending recorded transcription to router: %s", vt.msgForRouter)
 
@@ -462,12 +555,40 @@ func (vt *VoiceTranscriber) handleTranscription(text string) {
 
 	// If recording is active, append the text to the current transcription
 	if vt.isRecording {
+		vt.keepAlive <- true // Reset the keep alive timer
 		if vt.msgForRouter != "" {
 			vt.msgForRouter += " " + text // Append new text to the current transcription
 		} else {
 			vt.msgForRouter = text // Start a new transcription
 		}
 		log.Printf("Current transcription: %s", vt.msgForRouter)
+	}
+}
+
+// Close cleans up resources and stops the transcriber
+func keepAlive(vt *VoiceTranscriber, stop chan bool) {
+	seconds := 0
+	for {
+		if seconds >= TIME_INTERVAL*2 { // If no keep alive signal for 6 seconds, stop recording
+			stop <- true
+			return
+		}
+
+		select {
+		case <-vt.ctx.Done():
+			log.Println("Keep alive context done, stopping...")
+			stop <- true
+			return
+
+		case <-vt.keepAlive:
+			// Reset the seconds counter if we receive a keep alive signal
+			seconds = 0
+		default:
+			// Sleep and Increment the seconds counter
+			time.Sleep(1 * time.Second)
+			seconds++
+			log.Printf("Keep alive: %d seconds", seconds)
+		}
 	}
 }
 

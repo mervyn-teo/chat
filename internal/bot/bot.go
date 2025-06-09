@@ -324,38 +324,6 @@ func (b *Bot) RespondToMessage(channelId string, response string, ref *discordgo
 	}
 }
 
-// RespondInVC sends Text-To-Speech in a voice channel
-//func RespondInVC(b *Bot, ref *discordgo.MessageReference) {
-//	botUser, err := b.Session.User("@me")
-//	if err != nil {
-//		log.Printf("Error getting bot user: %v", err)
-//		return
-//	}
-//	channel, err := voiceChatUtils.FindVoiceChannel(b.Session, ref.GuildID, botUser.ID)
-//	if err != nil {
-//		return
-//	}
-//	vc, err := b.JoinVc(ref.GuildID, channel)
-//	if err != nil {
-//		return
-//	}
-//
-//	var stop <-chan bool
-//	var donePlaying chan<- bool
-//
-//	go voiceChatUtils.PlayAudioFile(vc, "output.mp3", stop, donePlaying)
-//
-//	switch {
-//	case <-stop:
-//		log.Println("Done playing audio file")
-//		err := vc.Disconnect()
-//		if err != nil {
-//			return
-//		}
-//
-//	}
-//}
-
 func (b *Bot) PlaybackResponse(vc *discordgo.VoiceConnection, AIresp string) {
 	if b.Session == nil {
 		log.Println("Error: Bot session not initialized in PlaybackResponse")
@@ -409,7 +377,7 @@ func (b *Bot) playAudio(filename string, vc *discordgo.VoiceConnection) {
 	// PLay the audio file in the voice channel
 	log.Printf("Queuing audio file %s in voice channel %s of guild %s", filename, vc.ChannelID, vc.GuildID)
 	for b.transcribeQueue[vc.GuildID][vc.ChannelID][0] != filename {
-		time.Sleep(100 * time.Millisecond) // Wait until the audio file is played
+		time.Sleep(500 * time.Millisecond) // between voice file playback, make it more natural
 	}
 
 	stop := make(chan bool, 0)        // Create a stop channel to signal when to stop playing
