@@ -241,7 +241,7 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}()
 
 		GID := m.GuildID
-		voiceChannel, err := voiceChatUtils.FindVoiceChannel(b.Session, GID, s.State.User.ID)
+		voiceChannel, err := voiceChatUtils.FindVoiceChannel(b.Session, GID, m.Author.ID)
 		if err != nil {
 			return
 		}
