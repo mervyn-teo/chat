@@ -29,6 +29,7 @@ type VoiceDetails struct {
 }
 
 func HandleMusicCall(call openai.ToolCall, s *map[string]map[string]*music.SongList, myBot *bot.Bot) (string, error) {
+	log.Println("Handling music call:", call.Function.Name)
 	if call.Type != openai.ToolTypeFunction {
 		log.Printf("Received unexpected tool type: %s", call.Type)
 		return fmt.Sprintf(`Unsupported tool type: %s"}`, call.Type), fmt.Errorf("unsupported tool type: %s", call.Type)
@@ -175,6 +176,7 @@ func playSong(call openai.ToolCall, s *map[string]map[string]*music.SongList, my
 		return `Cannot play song while already playing`, fmt.Errorf("cannot play song while already playing")
 	}
 
+	log.Println("Attempt to play song")
 	err = currSongList.PlaySong(args.GID, args.CID, myBot, storage.Setting.YoutubeCookies)
 
 	if err != nil {

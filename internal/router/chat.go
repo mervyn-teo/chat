@@ -30,9 +30,8 @@ const (
 var (
 	reminders      reminder.ReminderList
 	remindersMutex sync.RWMutex
-
-	songMap      map[string]map[string]*music.SongList = make(map[string]map[string]*music.SongList)
-	songMapMutex sync.RWMutex
+	songMap        map[string]map[string]*music.SongList // songMap holds the song lists for each user, the key is guildID, channelID(text channel ID)
+	songMapMutex   sync.RWMutex
 )
 
 // SendMessage sends a message to the OpenRouter API and handles tool calls
@@ -201,19 +200,25 @@ func SplitString(s string, chunkSize int) []string {
 	return ret
 }
 
-func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageWithWait, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string) {
+// MessageLoop listens for messages from the bot and processes them
+// It handles user messages, tool calls, and manages the conversation history
+// It also handles reminders and music-related commands
+func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageForCompletion, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string) {
+	// Load reminders and song map from files
 	err := reminder.LoadRemindersFromFile(&reminders)
 	if err != nil {
 		log.Println("Error loading reminders from file:", err)
 		return
 	}
 
+	// Load song map from file
 	err = music.LoadSongMapFromFile(&songMap)
 	if err != nil {
 		log.Println("Error loading song map from file:", err)
 		return
 	}
 
+	// Check if messages map is nil, if so, initialize it
 	if messages == nil {
 		log.Println("Router loop: messages map is nil, initializing.")
 		messages = initRouter()
@@ -228,7 +233,6 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			return // Exit the loop
 
 		case userInput := <-messageChannel:
-
 			if *userInput.IsForget {
 				// Handle the forget command
 				messages[userInput.Message.Author.ID] = setInitialMessages(instructions, userInput.Message.Author.ID)
@@ -248,9 +252,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 					"textchannelID"	: "1122334455",
 					"message" 		: "Hello, how are you?"
 				}
-
 			*/
-
 			userID := userInput.Message.Author.ID
 			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
 			parsedUserMsg = fmt.Sprintf("{\n"+
@@ -300,6 +302,28 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			storage.SaveChatHistory(messages, chatFilepath)
 
 			log.Println("Response to user: " + aiResponseContent)
+
+			if userInput.IsPlayback {
+				log.Printf("Playback mode enabled for user %s in channel %s", userID, userInput.VC.ChannelID)
+
+				if userInput.VC == nil {
+					log.Println("Playback mode requested but no voice channel provided.")
+					continue
+				}
+
+				GID := userInput.VC.GuildID
+				CID := userInput.VC.ChannelID
+
+				// enter playback mode ONLY if the music is Not already playing
+				if songMap[GID][CID] != nil && !(songMap[GID][CID].IsPlaying) {
+					log.Printf("Music is already playing in voice channel %s, skipping playback mode for user %s", CID, userID)
+					continue
+				}
+
+				// Handle playback mode, e.g., play a song or audio response
+				go Mybot.PlaybackResponse(userInput.VC, aiResponseContent)
+				continue
+			}
 
 			if len(aiResponseContent) > MaxMessageLength {
 				// Split the response into chunks of 1900 characters
