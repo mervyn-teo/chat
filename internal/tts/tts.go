@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/polly"
 	"github.com/aws/aws-sdk-go-v2/service/polly/types"
 	_ "github.com/aws/aws-sdk-go-v2/service/polly/types"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"io"
 	"log"
@@ -17,8 +18,9 @@ import (
 )
 
 func LoadConfig() aws.Config {
+	log.Println("Loading aws Config")
 
-	err := godotenv.Load("../../.env")
+	err := godotenv.Load(".env")
 	if err != nil {
 		fmt.Printf("Error loading .env file: %v\n", err)
 	}
@@ -32,13 +34,15 @@ func LoadConfig() aws.Config {
 		Region: os.Getenv("region"),
 	}
 
+	log.Println(os.Getenv("aws_access_key_id"), os.Getenv("aws_secret_access_key"), os.Getenv("region")) //TODO: remove this line in production
+
 	return awsConfig
 }
 
-func TextToSpeech(text string, awsConfig aws.Config) error {
+func TextToSpeech(text string, awsConfig aws.Config) (filename string, err error) {
 	if text == "" {
 		log.Println("Text input is empty. Please provide valid text.")
-		return errors.New("text input cannot be empty")
+		return "", errors.New("text input cannot be empty")
 	}
 
 	client := polly.NewFromConfig(awsConfig)
@@ -51,18 +55,26 @@ func TextToSpeech(text string, awsConfig aws.Config) error {
 
 	if err != nil {
 		log.Println("Error synthesizing speech:", err)
-		return err
+		return "", err
 	}
 
-	if storage.CheckFileExistence("output.mp3") {
-		err := os.Remove("output.mp3")
+	newUUID, err := uuid.NewUUID()
+
+	if err != nil {
+		log.Println("Error generating UUID:", err)
+	}
+
+	audioFilename := newUUID.String() + ".mp3"
+
+	if storage.CheckFileExistence(audioFilename) {
+		err := os.Remove(audioFilename)
 		if err != nil {
-			return err
+			return "", err
 		}
 		log.Println("Removed existing output.mp3 file")
 	}
 
-	file, err := os.Create("output.mp3")
+	file, err := os.Create(audioFilename)
 	if err != nil {
 		log.Fatal("Error creating output file:", err)
 	}
@@ -75,9 +87,9 @@ func TextToSpeech(text string, awsConfig aws.Config) error {
 	_, err = io.Copy(file, output.AudioStream)
 	if err != nil {
 		log.Printf("Error writing audio stream to file: %v", err)
-		return err
+		return "", err
 	}
 
-	log.Println("Speech successfully synthesized and saved to output.mp3")
-	return nil
+	log.Println("Speech successfully synthesized and saved to" + audioFilename)
+	return audioFilename, nil
 }

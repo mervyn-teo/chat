@@ -12,6 +12,7 @@ import (
 	"untitled/internal/bot"
 	"untitled/internal/router"
 	"untitled/internal/storage"
+	"untitled/internal/tts"
 )
 
 var (
@@ -44,10 +45,13 @@ func init() {
 
 func main() {
 	// Shared channel for communication between bot and router
-	messageChannel := make(chan *bot.MessageWithWait)
+	messageChannel := make(chan *bot.MessageForCompletion)
+
+	// tts routine
+	awsConf := tts.LoadConfig()
 
 	// Create the bot instance
-	myBot, err := bot.NewBot(settings.DiscordToken, messageChannel)
+	myBot, err := bot.NewBot(settings.DiscordToken, messageChannel, awsConf)
 	if err != nil {
 		log.Fatalf("Failed to create Discord bot: %v", err)
 	}

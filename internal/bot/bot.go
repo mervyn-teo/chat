@@ -2,6 +2,7 @@ package bot
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/bwmarrin/discordgo"
 	"log"
 	"os"
@@ -9,29 +10,47 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"untitled/internal/tts"
+	"untitled/internal/voiceChatUtils"
+	"untitled/transcribe"
 )
 
 // Bot holds the state for a Discord bot instance
 type Bot struct {
-	Token          string
-	Session        *discordgo.Session
-	messageQueue   []MessageWithWait
-	mu             sync.Mutex
-	messageChannel chan *MessageWithWait // Channel for message processing
+	Token             string
+	Session           *discordgo.Session
+	messageQueue      []MessageForCompletion
+	mu                sync.Mutex
+	messageChannel    chan *MessageForCompletion     // Channel for message processing
+	stopTranscribe    chan bool                      // Flag to stop transcription if needed
+	transcribeChannel chan *transcribe.Msg           // Channel for transcription messages
+	awsConfig         aws.Config                     // AWS configuration for TTS
+	transcribeQueue   map[string]map[string][]string // Queue for transcription messages, keyed by guild ID and channel ID, value is file name
 }
 
-type MessageWithWait struct {
+// MessageForCompletion represents a message that needs to be processed with a wait message.
+// Wait messages are used to acknowledge receipt of a message and provide a way to delete it later.
+// It includes the original message, a wait message to acknowledge receipt, and a flag for forgetting
+// the message
+// This struct is used to queue messages that the bot sends to the router for processing.
+type MessageForCompletion struct {
 	Message     *discordgo.MessageCreate
 	WaitMessage *discordgo.Message
 	IsForget    *bool
+	IsPlayback  bool // Indicates if the message is for playback
+	VC          *discordgo.VoiceConnection
 }
 
 // NewBot creates a new Bot instance but doesn't connect yet
-func NewBot(token string, msgChan chan *MessageWithWait) (*Bot, error) {
+func NewBot(token string, msgChan chan *MessageForCompletion, awsConf aws.Config) (*Bot, error) {
 	b := &Bot{
 		Token:          token,
-		messageChannel: msgChan, // Or initialize channel here
+		messageChannel: msgChan,
+		awsConfig:      awsConf,
 	}
+
+	b.transcribeChannel = make(chan *transcribe.Msg)
+
 	// Create session - Don't open yet
 	var err error
 	b.Session, err = discordgo.New("Bot " + b.Token)
@@ -54,6 +73,7 @@ func (b *Bot) Start() error {
 	// Start any necessary goroutines
 	// Consider if relayMessagetToRouter is still the best approach
 	go b.relayMessagesToRouter()
+	go b.relayTranscribeMsg()
 
 	fmt.Println("Bot running....")
 
@@ -65,10 +85,33 @@ func (b *Bot) Start() error {
 	return b.Session.Close()
 }
 
+func (b *Bot) relayTranscribeMsg() {
+	log.Println("Transcription relay started. Waiting for messages...")
+
+	// This loop will block on <-b.transcribeChannel until a message
+	// is available. It's the most efficient way to wait.
+	for message := range b.transcribeChannel {
+		log.Println("Received transcription message from channel.")
+
+		isForget := false
+
+		packageMsg := &MessageForCompletion{
+			Message:     &discordgo.MessageCreate{Message: message.Message},
+			WaitMessage: nil,
+			IsForget:    &isForget,
+			IsPlayback:  true,
+			VC:          message.VC,
+		}
+
+		log.Println("Sending transcription message to router")
+		b.messageChannel <- packageMsg // Send content to the next channel
+	}
+}
+
 // relayMessagesToRouter processes the internal queue
 func (b *Bot) relayMessagesToRouter() {
 	for {
-		var message *MessageWithWait // Declare outside lock
+		var message *MessageForCompletion
 
 		b.mu.Lock()
 		if len(b.messageQueue) > 0 {
@@ -147,7 +190,7 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		fmt.Println("Message content: ", m.Content)
 
-		msg := MessageWithWait{
+		msg := MessageForCompletion{
 			Message:     m,
 			WaitMessage: refer,
 			IsForget:    &isForget,
@@ -172,23 +215,70 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 
-		b.forgetMessage(MessageWithWait{
+		b.forgetMessage(MessageForCompletion{
 			Message:     m,
 			WaitMessage: refer,
 			IsForget:    &isForget,
 		})
-	}
+	case strings.HasPrefix(m.Content, "!start"):
+		if b.stopTranscribe == nil {
+			b.stopTranscribe = make(chan bool) // Initialize the stop channel
+		}
 
+		if b.transcribeChannel == nil {
+			log.Println("Error: transcribe channel is nil")
+			return
+		}
+
+		ready := make(chan bool, 0)
+
+		go func() {
+			<-ready // Wait for the transcribe to be ready
+			_, err := s.ChannelMessageSendReply(m.ChannelID, "Transcription started. You can now speak to the bot.", m.Reference())
+			if err != nil {
+				return
+			}
+		}()
+
+		GID := m.GuildID
+		voiceChannel, err := voiceChatUtils.FindVoiceChannel(b.Session, GID, m.Author.ID)
+		if err != nil {
+			return
+		}
+
+		transcribe.StartTranscribe(b.Session, b.stopTranscribe, b.transcribeChannel, ready, GID, voiceChannel)
+
+	case strings.HasPrefix(m.Content, "!stop"):
+		// stop transcription
+		refer, err := s.ChannelMessageSendReply(m.ChannelID, "Stopping transcription...", m.Reference())
+		if err != nil {
+			log.Printf("Error sending ack for !stop: %v", err)
+			return
+		}
+
+		_, err = s.ChannelMessageSendReply(refer.ChannelID, "Transcription stopped.", refer.Reference())
+		if err != nil {
+			log.Printf("Error sending stop message: %v", err)
+			return
+		}
+
+		if b.stopTranscribe != nil {
+			b.stopTranscribe <- true // Signal to stop transcription
+			b.stopTranscribe = nil   // Reset the channel
+		} else {
+			log.Println("No transcription in progress to stop.")
+		}
+	}
 }
 
 // addMessage adds a message to the internal queue
-func (b *Bot) addMessage(message MessageWithWait) {
+func (b *Bot) addMessage(message MessageForCompletion) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.messageQueue = append(b.messageQueue, message)
 }
 
-func (b *Bot) forgetMessage(msg MessageWithWait) {
+func (b *Bot) forgetMessage(msg MessageForCompletion) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -234,37 +324,85 @@ func (b *Bot) RespondToMessage(channelId string, response string, ref *discordgo
 	}
 }
 
-// RespondInVC sends Text-To-Speech in a voice channel
-//func RespondInVC(b *Bot, ref *discordgo.MessageReference) {
-//	botUser, err := b.Session.User("@me")
-//	if err != nil {
-//		log.Printf("Error getting bot user: %v", err)
-//		return
-//	}
-//	channel, err := voiceChatUtils.FindVoiceChannel(b.Session, ref.GuildID, botUser.ID)
-//	if err != nil {
-//		return
-//	}
-//	vc, err := b.JoinVc(ref.GuildID, channel)
-//	if err != nil {
-//		return
-//	}
-//
-//	var stop <-chan bool
-//	var donePlaying chan<- bool
-//
-//	go voiceChatUtils.PlayAudioFile(vc, "output.mp3", stop, donePlaying)
-//
-//	switch {
-//	case <-stop:
-//		log.Println("Done playing audio file")
-//		err := vc.Disconnect()
-//		if err != nil {
-//			return
-//		}
-//
-//	}
-//}
+func (b *Bot) PlaybackResponse(vc *discordgo.VoiceConnection, AIresp string) {
+	if b.Session == nil {
+		log.Println("Error: Bot session not initialized in PlaybackResponse")
+		return
+	}
+
+	if vc == nil {
+		log.Println("Error: Voice connection is nil in PlaybackResponse")
+		return
+	}
+
+	// use tts to convert AI response to audio
+	if AIresp == "" {
+		log.Println("Error: AI response is empty in PlaybackResponse")
+		return
+	}
+
+	audioFileName, err := tts.TextToSpeech(AIresp, b.awsConfig)
+
+	if err != nil {
+		log.Println("Error converting AI response to audio:", err)
+	}
+
+	if audioFileName == "" {
+		log.Println("Error: audio file name is empty in PlaybackResponse")
+		return
+	}
+
+	// Play the audio file
+	b.playAudio(audioFileName, vc)
+}
+
+func (b *Bot) playAudio(filename string, vc *discordgo.VoiceConnection) {
+	// add the audio file to the transcribe queue
+	if b.transcribeQueue == nil {
+		b.transcribeQueue = make(map[string]map[string][]string)
+	}
+
+	if b.transcribeQueue[vc.GuildID] == nil {
+		b.transcribeQueue[vc.GuildID] = make(map[string][]string)
+	}
+
+	if b.transcribeQueue[vc.GuildID][vc.ChannelID] == nil {
+		b.transcribeQueue[vc.GuildID][vc.ChannelID] = make([]string, 0)
+	}
+
+	b.mu.Lock()
+	b.transcribeQueue[vc.GuildID][vc.ChannelID] = append(b.transcribeQueue[vc.GuildID][vc.ChannelID], filename)
+	b.mu.Unlock()
+
+	// PLay the audio file in the voice channel
+	log.Printf("Queuing audio file %s in voice channel %s of guild %s", filename, vc.ChannelID, vc.GuildID)
+	for b.transcribeQueue[vc.GuildID][vc.ChannelID][0] != filename {
+		time.Sleep(500 * time.Millisecond) // between voice file playback, make it more natural
+	}
+
+	stop := make(chan bool, 0)        // Create a stop channel to signal when to stop playing
+	donePlaying := make(chan bool, 0) // Create a channel to signal when done playing
+
+	log.Println("Playing audio file", filename)
+	go voiceChatUtils.PlayAudioFile(vc, filename, stop, donePlaying)
+
+	switch {
+	case <-donePlaying:
+		time.Sleep(50 * time.Millisecond) // Give some time for the audio to finish playing
+		log.Println("Done playing audio file")
+		b.mu.Lock()
+		log.Println("removing audio file from transcribe queue")
+		b.transcribeQueue[vc.GuildID][vc.ChannelID] = b.transcribeQueue[vc.GuildID][vc.ChannelID][1:] // Remove the first element
+		b.mu.Unlock()
+		log.Println("cleanup audio file", filename)
+		err := os.Remove(filename)
+		if err != nil {
+			log.Printf("Error removing audio file %s: %v", filename, err)
+		} else {
+			log.Printf("Removed audio file %s successfully", filename)
+		}
+	}
+}
 
 func (b *Bot) RespondToLongMessage(channelId string, response []string, ref *discordgo.MessageReference, waitMessage *discordgo.Message) {
 	if b.Session == nil {
@@ -350,7 +488,7 @@ func (b *Bot) JoinVC(guildID string, channelID string) (*discordgo.VoiceConnecti
 	return vc, nil
 }
 
-func (b *Bot) LeaveVC(guildID string, channelID string) {
+func (b *Bot) LeaveVC(guildID string) {
 	currSession := b.Session
 
 	if currSession == nil {
