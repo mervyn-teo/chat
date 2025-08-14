@@ -25,6 +25,11 @@ const (
 	MaxMessagesToKeep     = 20
 	MaxToolCallIterations = 10
 	DefaultChunkSize      = 1900
+
+	CompressionPrompt = `Summarise the following conversation history to reduce its length 
+						 while preserving the main points and context. The summary should 
+						 be concise and capture the essence of the conversation without 
+						 losing important details.`
 )
 
 var (
@@ -295,9 +300,15 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			messages[userID] = updatedMessages
 
-			// Trim messages
-			trimmed := trimMsg(messages[userID], MaxMessagesToKeep)
-			messages[userID] = trimmed
+			// Trim messages (replaced with message history compression for now)
+			//trimmed := trimMsg(messages[userID], MaxMessagesToKeep)
+			//messages[userID] = trimmed
+
+			// Compress messages to reduce length
+			if len(messages[userID]) > MaxMessagesToKeep {
+				log.Printf("Compressing messages for user %s to reduce length", userID)
+				messages[userID] = compressMsg(client, messages[userID])
+			}
 
 			storage.SaveChatHistory(messages, chatFilepath)
 
@@ -335,6 +346,61 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 		}
 	}
+}
+
+// Compresses the messages using a model to reduce the length of the conversation history.
+// This function uses a model to summarize the messages.
+func compressMsg(client *openai.Client, messages []ChatCompletionMessage) []ChatCompletionMessage {
+	log.Println("Compressing messages to reduce length")
+
+	if len(messages) == 0 {
+		return messages
+	}
+
+	// Flatten the messages into a single string
+	var flattenedContent strings.Builder
+	flattenedContent.WriteString("Conversation history:\n")
+	for _, msg := range messages {
+		if msg.Role == ChatMessageRoleSystem {
+			continue // Skip system messages for compression
+		}
+		flattenedContent.WriteString(fmt.Sprintf("%s: %s\n", msg.Role, msg.Content))
+	}
+
+	// Create a system message with the compression prompt
+	pendingCompressionMessage := []ChatCompletionMessage{}
+	pendingCompressionMessage = append(pendingCompressionMessage, ChatCompletionMessage{
+		Role:    ChatMessageRoleSystem,
+		Content: CompressionPrompt,
+	})
+
+	// Add the flattened content to the messages
+	pendingCompressionMessage = append(pendingCompressionMessage, ChatCompletionMessage{
+		Role:    ChatMessageRoleUser,
+		Content: flattenedContent.String(),
+	})
+
+	// Use a model to compress the content. For simplicity’s sake now, use the current chat model.
+	compressionCompleteMessage, err := SendMessage(client, &pendingCompressionMessage, nil)
+	if err != nil {
+		return nil
+	}
+
+	// Create a new message with the compressed content
+	var ret []ChatCompletionMessage
+	for _, msg := range messages {
+		if msg.Role == ChatMessageRoleSystem {
+			msg.Content =
+				msg.Content +
+					"Here is the summary of your conversation history with the user previously:\n" +
+					compressionCompleteMessage
+			ret = append(ret, msg) // Preserve system messages
+			break
+		}
+	}
+
+	// Return a new slice with the compressed message
+	return ret
 }
 
 // Trim messages to a maximum length, only keeping the last maxMsg number of user messages
