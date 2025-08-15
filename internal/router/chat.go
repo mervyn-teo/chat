@@ -307,7 +307,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			// Compress messages to reduce length
 			if len(messages[userID]) > MaxMessagesToKeep {
 				log.Printf("Compressing messages for user %s to reduce length", userID)
-				messages[userID] = compressMsg(client, messages[userID])
+				messages[userID] = compressMsg(client, messages[userID], Mybot)
 			}
 
 			storage.SaveChatHistory(messages, chatFilepath)
@@ -350,7 +350,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 // Compresses the messages using a model to reduce the length of the conversation history.
 // This function uses a model to summarize the messages.
-func compressMsg(client *openai.Client, messages []ChatCompletionMessage) []ChatCompletionMessage {
+func compressMsg(client *openai.Client, messages []ChatCompletionMessage, b *bot.Bot) []ChatCompletionMessage {
 	log.Println("Compressing messages to reduce length")
 
 	if len(messages) == 0 {
@@ -366,9 +366,10 @@ func compressMsg(client *openai.Client, messages []ChatCompletionMessage) []Chat
 		}
 		flattenedContent.WriteString(fmt.Sprintf("%s: %s\n", msg.Role, msg.Content))
 	}
+	log.Println("Flattening messages for compression: " + flattenedContent.String())
 
 	// Create a system message with the compression prompt
-	pendingCompressionMessage := []ChatCompletionMessage{}
+	var pendingCompressionMessage []ChatCompletionMessage
 	pendingCompressionMessage = append(pendingCompressionMessage, ChatCompletionMessage{
 		Role:    ChatMessageRoleSystem,
 		Content: CompressionPrompt,
@@ -381,8 +382,9 @@ func compressMsg(client *openai.Client, messages []ChatCompletionMessage) []Chat
 	})
 
 	// Use a model to compress the content. For simplicity’s sake now, use the current chat model.
-	compressionCompleteMessage, err := SendMessage(client, &pendingCompressionMessage, nil)
+	compressionCompleteMessage, err := SendMessage(client, &pendingCompressionMessage, b)
 	if err != nil {
+		log.Printf("Error compressing messages: %v", err)
 		return nil
 	}
 
@@ -395,6 +397,7 @@ func compressMsg(client *openai.Client, messages []ChatCompletionMessage) []Chat
 					"Here is the summary of your conversation history with the user previously:\n" +
 					compressionCompleteMessage
 			ret = append(ret, msg) // Preserve system messages
+			log.Println(ret[0].Content)
 			break
 		}
 	}
