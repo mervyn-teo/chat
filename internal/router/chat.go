@@ -33,10 +33,11 @@ const (
 )
 
 var (
-	reminders      reminder.ReminderList
-	remindersMutex sync.RWMutex
-	songMap        map[string]map[string]*music.SongList // songMap holds the song lists for each user, the key is guildID, channelID(text channel ID)
-	songMapMutex   sync.RWMutex
+	reminders            reminder.ReminderList
+	remindersMutex       sync.RWMutex
+	songMap              map[string]map[string]*music.SongList // songMap holds the song lists for each user, the key is guildID, channelID(text channel ID)
+	songMapMutex         sync.RWMutex
+	initialSystemMessage string
 )
 
 // SendMessage sends a message to the OpenRouter API and handles tool calls
@@ -208,7 +209,9 @@ func SplitString(s string, chunkSize int) []string {
 // MessageLoop listens for messages from the bot and processes them
 // It handles user messages, tool calls, and manages the conversation history
 // It also handles reminders and music-related commands
-func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageForCompletion, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string) {
+func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageForCompletion, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string, initSystemMessage string) {
+	initialSystemMessage = initSystemMessage
+
 	// Load reminders and song map from files
 	err := reminder.LoadRemindersFromFile(&reminders)
 	if err != nil {
@@ -362,11 +365,13 @@ func compressMsg(client *openai.Client, messages []ChatCompletionMessage, b *bot
 	flattenedContent.WriteString("Conversation history:\n")
 	for _, msg := range messages {
 		if msg.Role == ChatMessageRoleSystem {
+			//isolate past history from the system message
+			pastHistory := strings.Split(msg.Content, "Here is the summary of your conversation history with the user previously:")
+			flattenedContent.WriteString(fmt.Sprintf("System: %s\n", pastHistory[1]))
 			continue // Skip system messages for compression
 		}
 		flattenedContent.WriteString(fmt.Sprintf("%s: %s\n", msg.Role, msg.Content))
 	}
-	log.Println("Flattening messages for compression: " + flattenedContent.String())
 
 	// Create a system message with the compression prompt
 	var pendingCompressionMessage []ChatCompletionMessage
@@ -393,7 +398,7 @@ func compressMsg(client *openai.Client, messages []ChatCompletionMessage, b *bot
 	for _, msg := range messages {
 		if msg.Role == ChatMessageRoleSystem {
 			msg.Content =
-				msg.Content +
+				initialSystemMessage +
 					"Here is the summary of your conversation history with the user previously:\n" +
 					compressionCompleteMessage
 			ret = append(ret, msg) // Preserve system messages
@@ -401,6 +406,7 @@ func compressMsg(client *openai.Client, messages []ChatCompletionMessage, b *bot
 			break
 		}
 	}
+	ret = append(ret, messages[len(messages)-1]) // Append the last user message to the compressed messages
 
 	// Return a new slice with the compressed message
 	return ret

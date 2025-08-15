@@ -70,7 +70,7 @@ func main() {
 	go func() {
 		defer wg.Done() // Signal completion when this goroutine exits
 		// Pass the cancellable context to the loop
-		router.MessageLoop(ctx, myBot, client, messageChannel, settings.Instructions, messages, settings.ChatHistoryFilePath)
+		router.MessageLoop(ctx, myBot, client, messageChannel, settings.Instructions, messages, settings.ChatHistoryFilePath, settings.Instructions)
 		log.Println("Router loop stopped.")
 	}()
 
