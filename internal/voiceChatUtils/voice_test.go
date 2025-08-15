@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 }
 
 func setup() {
-	err := godotenv.Load(".env")
+	err := godotenv.Load("..\\.env")
 	if err != nil {
 		fmt.Printf("Error loading .env file: %v\n", err)
 	}
