@@ -367,7 +367,9 @@ func compressMsg(client *openai.Client, messages []ChatCompletionMessage, b *bot
 		if msg.Role == ChatMessageRoleSystem {
 			//isolate past history from the system message
 			pastHistory := strings.Split(msg.Content, "Here is the summary of your conversation history with the user previously:")
-			flattenedContent.WriteString(fmt.Sprintf("System: %s\n", pastHistory[1]))
+			if len(pastHistory) >= 2 {
+				flattenedContent.WriteString(fmt.Sprintf("System: %s\n", pastHistory[1]))
+			}
 			continue // Skip system messages for compression
 		}
 		flattenedContent.WriteString(fmt.Sprintf("%s: %s\n", msg.Role, msg.Content))
