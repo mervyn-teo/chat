@@ -1,9 +1,15 @@
 package router
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
+	"github.com/bwmarrin/discordgo"
+	"io"
 	"log"
+	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"untitled/internal/bot"
@@ -252,7 +258,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			}
 
 			/*
-				Mesaage format:
+				Message format:
 				{
 					"userID"		: "1234567890",
 					"userName"		: "exampleUser",
@@ -262,7 +268,24 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				}
 			*/
 			userID := userInput.Message.Author.ID
+
+			imageDescriptions := strings.Builder{}
+			imageDescriptions.WriteString("{\n \"images\" : ")
+			if userInput.Message.Attachments != nil {
+				for i, attachment := range userInput.Message.Attachments {
+					if strings.HasPrefix(attachment.ContentType, "image/") {
+						imageDescriptions.WriteString("{\n\"index\" : " + strconv.Itoa(i) + ",\n\"description\": " + getImageDescription(client, attachment, Mybot) + "}, \n")
+					}
+				}
+			}
+			imageDescriptions.WriteString("\n}")
+
 			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
+
+			if imageDescriptions.Len() > 0 {
+				parsedUserMsg = imageDescriptions.String() + "\n" + parsedUserMsg
+			}
+
 			parsedUserMsg = fmt.Sprintf("{\n"+
 				"\"userID\": \"%s\", \n"+
 				"\"userName\": \"%s\", \n"+
@@ -270,6 +293,8 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 				"\"textchannelID\" \"%s\", \n"+
 				"\"content\": \"%s\"\n"+
 				"}", userID, userInput.Message.Author.Username, userInput.Message.GuildID, userInput.Message.ChannelID, parsedUserMsg)
+
+			log.Println(parsedUserMsg)
 
 			if isSkip {
 				continue
@@ -349,6 +374,103 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
 		}
 	}
+}
+
+func getImageDescription(
+	client *openai.Client,
+	attachment *discordgo.MessageAttachment,
+	b *bot.Bot,
+) string {
+	if attachment == nil {
+		log.Println("No image attachment provided")
+		return ""
+	}
+
+	log.Printf("Attempting to download image from ProxyURL: %s (ContentType: %s)", attachment.ProxyURL, attachment.ContentType)
+
+	// 1. Download the image from the ProxyURL
+	resp, err := http.Get(attachment.ProxyURL)
+	if err != nil {
+		log.Printf("Failed to download image from Discord CDN: %v", err)
+		return ""
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Failed to download image: HTTP status %d %s", resp.StatusCode, resp.Status)
+		return ""
+	}
+
+	imageBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Failed to read image bytes from response body: %v", err)
+		return ""
+	}
+
+	// Optional: Basic check to ensure some bytes were read
+	if len(imageBytes) == 0 {
+		log.Println("Downloaded image is empty.")
+		return ""
+	}
+
+	// 2. Encode the image bytes to Base64
+	// Determine the media type for the data URI.
+	// You can try to infer from attachment.ContentType, but it's often safer
+	// to use a general "image/jpeg" or "image/png" or even "application/octet-stream"
+	// if you are unsure, though the model prefers specific types.
+	// For best results, use the actual ContentType from Discord.
+	mediaType := attachment.ContentType
+	if mediaType == "" {
+		// Fallback if ContentType is not provided or empty
+		// This is a basic guess, you might need a more robust mime type detection
+		if bytes.HasPrefix(imageBytes, []byte{0xFF, 0xD8, 0xFF}) { // JPEG magic number
+			mediaType = "image/jpeg"
+		} else if bytes.HasPrefix(imageBytes, []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}) { // PNG magic number
+			mediaType = "image/png"
+		} else {
+			mediaType = "application/octet-stream" // Generic fallback
+			log.Println("Warning: attachment.ContentType was empty, using generic application/octet-stream for image data URI.")
+		}
+	}
+
+	// Construct the data URI
+	// Example: data:image/jpeg;base64,...
+	base64Image := base64.StdEncoding.EncodeToString(imageBytes)
+	dataURI := fmt.Sprintf("data:%s;base64,%s", mediaType, base64Image)
+
+	// 3. Create the ChatCompletionMessage with the Base64 Data URI
+	messages := []openai.ChatCompletionMessage{
+		{
+			Role: openai.ChatMessageRoleUser,
+			MultiContent: []openai.ChatMessagePart{
+				{
+					Type: openai.ChatMessagePartTypeText,
+					Text: "What is in this image? Make sure to give me full details.",
+				},
+				{
+					Type: openai.ChatMessagePartTypeImageURL,
+					ImageURL: &openai.ChatMessageImageURL{
+						URL:    dataURI, // Use the Base64 data URI here
+						Detail: openai.ImageURLDetailAuto,
+					},
+				},
+			},
+		},
+	}
+
+	// 4. Send the message to OpenAI
+	description, err := SendMessage(client, &messages, b)
+	if err != nil {
+		log.Printf("Error getting image description after downloading and encoding: %v", err)
+		return ""
+	}
+
+	return description
 }
 
 // Compresses the messages using a model to reduce the length of the conversation history.
