@@ -129,6 +129,7 @@ func (b *Bot) relayMessagesToRouter() {
 }
 
 // newMessage is the event handler, now a method on Bot
+// This method is triggered every time a message is sent in the channel
 func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
