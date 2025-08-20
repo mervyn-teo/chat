@@ -485,7 +485,9 @@ func TestMessageLoop(t *testing.T) {
 	messages := make(map[string][]ChatCompletionMessage)
 
 	// Start message loop in goroutine
-	go MessageLoop(ctx, &bot.Bot{}, client, messageChannel, "Test instructions", messages, tempChatFile.Name(), "test init message")
+	clients := &Clients{}
+	clients.BaseClient = client
+	go MessageLoop(ctx, &bot.Bot{}, clients, messageChannel, "Test instructions", messages, tempChatFile.Name(), "test init message")
 
 	// Test normal message
 	testMessage := &bot.MessageForCompletion{
