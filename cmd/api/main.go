@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	client   *openai.Client
+	client   *router.Clients
 	settings storage.Settings
 	messages map[string][]openai.ChatCompletionMessage
 )
@@ -37,7 +37,11 @@ func init() {
 	messages = storage.ReadChatHistory(settings.ChatHistoryFilePath)
 
 	// Create the OpenAI client
-	client, err = router.CreateClient(settings.Model, settings.ApiKey)
+	client = &router.Clients{}
+	client.BaseClient, err = router.CreateClient(settings.Model, settings.ApiKey)
+	client.CompressionClient, err = router.CreateClient(settings.CompressionModel, settings.ApiKey)
+	client.ImageClient, err = router.CreateClient(settings.ImageModel, settings.ApiKey)
+
 	if err != nil {
 		log.Fatalf("Failed to create OpenAI client: %v", err)
 	}

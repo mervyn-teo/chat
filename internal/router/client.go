@@ -7,6 +7,12 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
+type Clients struct {
+	BaseClient        *openai.Client
+	ImageClient       *openai.Client
+	CompressionClient *openai.Client
+}
+
 const (
 	OpenRouterBaseURL = "https://openrouter.ai/api/v1"
 	RefererURL        = "http://localhost"
