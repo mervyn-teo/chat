@@ -215,7 +215,7 @@ func SplitString(s string, chunkSize int) []string {
 // MessageLoop listens for messages from the bot and processes them
 // It handles user messages, tool calls, and manages the conversation history
 // It also handles reminders and music-related commands
-func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, messageChannel chan *bot.MessageForCompletion, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string, initSystemMessage string) {
+func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *Clients, messageChannel chan *bot.MessageForCompletion, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string, initSystemMessage string) {
 	initialSystemMessage = initSystemMessage
 
 	// Load reminders and song map from files
@@ -274,7 +274,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			if userInput.Message.Attachments != nil {
 				for i, attachment := range userInput.Message.Attachments {
 					if strings.HasPrefix(attachment.ContentType, "image/") {
-						imageDescriptions.WriteString("{\n\"index\" : " + strconv.Itoa(i) + ",\n\"description\": " + getImageDescription(client, attachment, Mybot) + "}, \n")
+						imageDescriptions.WriteString("{\n\"index\" : " + strconv.Itoa(i) + ",\n\"description\": " + getImageDescription(client.ImageClient, attachment, Mybot) + "}, \n")
 					}
 				}
 			}
@@ -317,7 +317,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 
 			storage.SaveChatHistory(messages, chatFilepath)
 
-			aiResponseContent, err := SendMessage(client, &updatedMessages, Mybot)
+			aiResponseContent, err := SendMessage(client.BaseClient, &updatedMessages, Mybot)
 
 			if err != nil {
 				log.Printf("Error getting response from OpenRouter: %v", err)
@@ -335,7 +335,7 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *openai.Client, mes
 			// Compress messages to reduce length
 			if len(messages[userID]) > MaxMessagesToKeep {
 				log.Printf("Compressing messages for user %s to reduce length", userID)
-				messages[userID] = compressMsg(client, messages[userID], Mybot)
+				messages[userID] = compressMsg(client.CompressionClient, messages[userID], Mybot)
 			}
 
 			storage.SaveChatHistory(messages, chatFilepath)

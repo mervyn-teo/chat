@@ -8,11 +8,17 @@ import (
 	"os"
 )
 
+const (
+	DefaultModel = "google/gemini-2.5-flash"
+)
+
 type Settings struct {
 	ApiKey              string `json:"api_key"`
 	DiscordToken        string `json:"discord_bot_token"`
 	Instructions        string `json:"instructions"`
 	Model               string `json:"model"`
+	CompressionModel    string `json:"compression_model"`
+	ImageModel          string `json:"image_model"`
 	NewsAPIToken        string `json:"news_api_key"`
 	YoutubeToken        string `json:"youtube_api_key"`
 	ChatHistoryFilePath string `json:"chat_history_file_path"`
@@ -49,6 +55,10 @@ func LoadSettings(filePath string) (Settings, error) {
 		return Setting, fmt.Errorf("error decoding settings JSON: %w", err)
 	}
 
+	if Setting.Model == "" {
+		Setting.Model = DefaultModel
+		log.Println("WARNING: no model found in settings file, setting default model: " + DefaultModel)
+	}
 	if Setting.ApiKey == "" {
 		return Setting, fmt.Errorf("API key is missing in settings file")
 	}
@@ -61,6 +71,18 @@ func LoadSettings(filePath string) (Settings, error) {
 	if Setting.YoutubeToken == "" {
 		return Setting, fmt.Errorf("Youtube API key is missing in settings file")
 	}
+	if Setting.CompressionModel == "" {
+		Setting.CompressionModel = Setting.Model
+		log.Println("Compression Model not set, setting to: ", Setting.CompressionModel)
+	}
+	if Setting.ImageModel == "" {
+		Setting.ImageModel = Setting.Model
+		log.Println("Image Model not set, setting to: ", Setting.CompressionModel)
+	}
+
+	log.Println("Base model: " + Setting.Model)
+	log.Println("Compression model: " + Setting.CompressionModel)
+	log.Println("Image model: " + Setting.ImageModel)
 
 	return Setting, nil
 }
