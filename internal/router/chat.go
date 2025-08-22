@@ -48,7 +48,7 @@ var (
 
 // SendMessage sends a message to the OpenRouter API and handles tool calls
 func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot *bot.Bot) (string, error) {
-	if client == nil || messages == nil || myBot == nil {
+	if client == nil || messages == nil {
 		return "", fmt.Errorf("invalid parameters: client, messages, or bot is nil")
 	}
 
@@ -215,7 +215,7 @@ func SplitString(s string, chunkSize int) []string {
 // MessageLoop listens for messages from the bot and processes them
 // It handles user messages, tool calls, and manages the conversation history
 // It also handles reminders and music-related commands
-func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *Clients, messageChannel chan *bot.MessageForCompletion, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string, initSystemMessage string) {
+func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *Clients, messageChannel chan *bot.MessageForCompletion, instructions string, messages map[string][]ChatCompletionMessage, chatFilepath string, initSystemMessage string, imageRequestChannel chan *bot.ImageDescriptionRequest) {
 	initialSystemMessage = initSystemMessage
 
 	// Load reminders and song map from files
@@ -247,133 +247,140 @@ func MessageLoop(ctx context.Context, Mybot *bot.Bot, client *Clients, messageCh
 			return // Exit the loop
 
 		case userInput := <-messageChannel:
-			if *userInput.IsForget {
-				// Handle the forget command
-				messages[userInput.Message.Author.ID] = setInitialMessages(instructions, userInput.Message.Author.ID)
-				storage.SaveChatHistory(messages, chatFilepath)
+			{
+				if *userInput.IsForget {
+					// Handle the forget command
+					messages[userInput.Message.Author.ID] = setInitialMessages(instructions, userInput.Message.Author.ID)
+					storage.SaveChatHistory(messages, chatFilepath)
 
-				log.Printf("Forget command executed for user %s in channel %s", userInput.Message.Author.ID, userInput.Message.ChannelID)
-				go Mybot.RespondToMessage(userInput.Message.ChannelID, "Your message history has been cleared", userInput.Message.Reference(), userInput.WaitMessage)
-				continue
-			}
-
-			/*
-				Message format:
-				{
-					"userID"		: "1234567890",
-					"userName"		: "exampleUser",
-					"guildID"		: "0987654321",
-					"textchannelID"	: "1122334455",
-					"message" 		: "Hello, how are you?"
+					log.Printf("Forget command executed for user %s in channel %s", userInput.Message.Author.ID, userInput.Message.ChannelID)
+					go Mybot.RespondToMessage(userInput.Message.ChannelID, "Your message history has been cleared", userInput.Message.Reference(), userInput.WaitMessage)
+					return
 				}
-			*/
-			userID := userInput.Message.Author.ID
 
-			imageDescriptions := strings.Builder{}
-			imageDescriptions.WriteString("{\n \"images\" : ")
-			if userInput.Message.Attachments != nil {
-				for i, attachment := range userInput.Message.Attachments {
-					if strings.HasPrefix(attachment.ContentType, "image/") {
-						imageDescriptions.WriteString("{\n\"index\" : " + strconv.Itoa(i) + ",\n\"description\": " + getImageDescription(client.ImageClient, attachment, Mybot) + "}, \n")
+				/*
+					Message format:
+					{
+						"userID"		: "1234567890",
+						"userName"		: "exampleUser",
+						"guildID"		: "0987654321",
+						"textchannelID"	: "1122334455",
+						"message" 		: "Hello, how are you?"
+					}
+				*/
+				userID := userInput.Message.Author.ID
+
+				imageDescriptions := strings.Builder{}
+				if userInput.Message.Attachments != nil {
+					for i, attachment := range userInput.Message.Attachments {
+						if strings.HasPrefix(attachment.ContentType, "image/") {
+							imageDescriptions.WriteString("{\n\"index\" : " + strconv.Itoa(i) + ",\n\"description\": " + getImageDescription(client.ImageClient, attachment, Mybot) + "}, \n")
+						}
 					}
 				}
-			}
-			imageDescriptions.WriteString("\n}")
 
-			parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
+				parsedUserMsg, isSkip := parseUserInput(userInput.Message.Content)
 
-			if imageDescriptions.Len() > 0 {
-				parsedUserMsg = imageDescriptions.String() + "\n" + parsedUserMsg
-			}
-
-			parsedUserMsg = fmt.Sprintf("{\n"+
-				"\"userID\": \"%s\", \n"+
-				"\"userName\": \"%s\", \n"+
-				"\"guildID\": %s, \n"+
-				"\"textchannelID\" \"%s\", \n"+
-				"\"content\": \"%s\"\n"+
-				"}", userID, userInput.Message.Author.Username, userInput.Message.GuildID, userInput.Message.ChannelID, parsedUserMsg)
-
-			log.Println(parsedUserMsg)
-
-			if isSkip {
-				continue
-			}
-
-			currentMessages, userExists := messages[userID]
-			if !userExists {
-				// First message from this user, initialize with system prompt
-				log.Printf("Initializing conversation for user: %s", userID)
-				currentMessages = setInitialMessages(instructions, userID)
-			}
-
-			updatedMessages := make([]ChatCompletionMessage, len(currentMessages))
-			copy(updatedMessages, currentMessages)
-
-			updatedMessages = append(updatedMessages, ChatCompletionMessage{
-				Role:    ChatMessageRoleUser,
-				Content: parsedUserMsg,
-			})
-
-			storage.SaveChatHistory(messages, chatFilepath)
-
-			aiResponseContent, err := SendMessage(client.BaseClient, &updatedMessages, Mybot)
-
-			if err != nil {
-				log.Printf("Error getting response from OpenRouter: %v", err)
-				if len(messages[userID]) > 0 {
-					messages[userID] = messages[userID][:len(messages[userID])-1]
-				}
-			}
-
-			messages[userID] = updatedMessages
-
-			// Trim messages (replaced with message history compression for now)
-			//trimmed := trimMsg(messages[userID], MaxMessagesToKeep)
-			//messages[userID] = trimmed
-
-			// Compress messages to reduce length
-			if len(messages[userID]) > MaxMessagesToKeep {
-				log.Printf("Compressing messages for user %s to reduce length", userID)
-				messages[userID] = compressMsg(client.CompressionClient, messages[userID], Mybot)
-			}
-
-			storage.SaveChatHistory(messages, chatFilepath)
-
-			log.Println("Response to user: " + aiResponseContent)
-
-			if userInput.IsPlayback {
-				log.Printf("Playback mode enabled for user %s in channel %s", userID, userInput.VC.ChannelID)
-
-				if userInput.VC == nil {
-					log.Println("Playback mode requested but no voice channel provided.")
-					continue
+				if imageDescriptions.Len() > 0 {
+					parsedUserMsg = "{\n \"images\" : " + imageDescriptions.String() + "}\n" + parsedUserMsg
 				}
 
-				GID := userInput.VC.GuildID
-				CID := userInput.VC.ChannelID
+				parsedUserMsg = fmt.Sprintf("{\n"+
+					"\"userID\": \"%s\", \n"+
+					"\"userName\": \"%s\", \n"+
+					"\"guildID\": %s, \n"+
+					"\"textchannelID\" \"%s\", \n"+
+					"\"content\": \"%s\"\n"+
+					"}", userID, userInput.Message.Author.Username, userInput.Message.GuildID, userInput.Message.ChannelID, parsedUserMsg)
 
-				// enter playback mode ONLY if the music is Not already playing
-				if songMap[GID][CID] != nil && !(songMap[GID][CID].IsPlaying) {
-					log.Printf("Music is already playing in voice channel %s, skipping playback mode for user %s", CID, userID)
-					continue
+				log.Println(parsedUserMsg)
+
+				if isSkip {
+					return
 				}
 
-				// Handle playback mode, e.g., play a song or audio response
-				go Mybot.PlaybackResponse(userInput.VC, aiResponseContent)
-				continue
-			}
+				currentMessages, userExists := messages[userID]
+				if !userExists {
+					// First message from this user, initialize with system prompt
+					log.Printf("Initializing conversation for user: %s", userID)
+					currentMessages = setInitialMessages(instructions, userID)
+				}
 
-			if len(aiResponseContent) > MaxMessageLength {
-				// Split the response into chunks of 1900 characters
-				chunks := SplitString(aiResponseContent, MaxMessageLength)
-				go Mybot.RespondToLongMessage(userInput.Message.ChannelID, chunks, userInput.Message.Reference(), userInput.WaitMessage)
-				continue
-			}
+				updatedMessages := make([]ChatCompletionMessage, len(currentMessages))
+				copy(updatedMessages, currentMessages)
 
-			go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
+				updatedMessages = append(updatedMessages, ChatCompletionMessage{
+					Role:    ChatMessageRoleUser,
+					Content: parsedUserMsg,
+				})
+
+				storage.SaveChatHistory(messages, chatFilepath)
+
+				aiResponseContent, err := SendMessage(client.BaseClient, &updatedMessages, Mybot)
+
+				if err != nil {
+					log.Printf("Error getting response from OpenRouter: %v", err)
+					if len(messages[userID]) > 0 {
+						messages[userID] = messages[userID][:len(messages[userID])-1]
+					}
+				}
+
+				messages[userID] = updatedMessages
+
+				// Trim messages (replaced with message history compression for now)
+				//trimmed := trimMsg(messages[userID], MaxMessagesToKeep)
+				//messages[userID] = trimmed
+
+				// Compress messages to reduce length
+				if len(messages[userID]) > MaxMessagesToKeep {
+					log.Printf("Compressing messages for user %s to reduce length", userID)
+					messages[userID] = compressMsg(client.CompressionClient, messages[userID], Mybot)
+				}
+
+				storage.SaveChatHistory(messages, chatFilepath)
+
+				log.Println("Response to user: " + aiResponseContent)
+
+				if userInput.IsPlayback {
+					log.Printf("Playback mode enabled for user %s in channel %s", userID, userInput.VC.ChannelID)
+
+					if userInput.VC == nil {
+						log.Println("Playback mode requested but no voice channel provided.")
+						return
+					}
+
+					GID := userInput.VC.GuildID
+					CID := userInput.VC.ChannelID
+
+					// enter playback mode ONLY if the music is Not already playing
+					if songMap[GID][CID] != nil && !(songMap[GID][CID].IsPlaying) {
+						log.Printf("Music is already playing in voice channel %s, skipping playback mode for user %s", CID, userID)
+						return
+					}
+
+					// Handle playback mode, e.g., play a song or audio response
+					go Mybot.PlaybackResponse(userInput.VC, aiResponseContent)
+					return
+				}
+
+				if len(aiResponseContent) > MaxMessageLength {
+					// Split the response into chunks of 1900 characters
+					chunks := SplitString(aiResponseContent, MaxMessageLength)
+					go Mybot.RespondToLongMessage(userInput.Message.ChannelID, chunks, userInput.Message.Reference(), userInput.WaitMessage)
+					return
+				}
+				go Mybot.RespondToMessage(userInput.Message.ChannelID, aiResponseContent, userInput.Message.Reference(), userInput.WaitMessage)
+
+			}
+		case imageRequest := <-imageRequestChannel:
+			go handleImageRequest(imageRequest, client.ImageClient, Mybot)
 		}
 	}
+}
+
+func handleImageRequest(request *bot.ImageDescriptionRequest, imgClient *openai.Client, Mybot *bot.Bot) {
+	description := getImageDescription(imgClient, request.AttachmentImg, Mybot)
+	request.Description = &description
 }
 
 func getImageDescription(
