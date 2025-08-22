@@ -77,11 +77,11 @@ func SendMessage(client *openai.Client, messages *[]ChatCompletionMessage, myBot
 
 	choice := resp.Choices[0]
 
-	interations := 0
+	iterations := 0
 	// Check if the model wants to use tools
 	for choice.FinishReason == openai.FinishReasonToolCalls && len(choice.Message.ToolCalls) > 0 {
-		interations++
-		if interations > MaxToolCallIterations {
+		iterations++
+		if iterations > MaxToolCallIterations {
 			log.Printf("Maximum tool call iterations (%d) exceeded", MaxToolCallIterations)
 			return "", fmt.Errorf("maximum tool call iterations exceeded")
 		}
