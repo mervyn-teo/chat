@@ -43,7 +43,7 @@ func setup() {
 	// tts routine
 	awsConf := tts.LoadConfig()
 
-	myBot, err = bot.NewBot(settings.DiscordToken, messageChannel, awsConf)
+	myBot, err = bot.NewBot(settings.DiscordToken, messageChannel, awsConf, nil)
 
 	if err != nil {
 		panic("Failed to create bot: " + err.Error())
