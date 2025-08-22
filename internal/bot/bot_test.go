@@ -17,7 +17,7 @@ func createTestBot(t *testing.T) (*Bot, chan *MessageForCompletion) {
 	// tts routine
 	awsConf := tts.LoadConfig()
 
-	bot, err := NewBot("test-token", msgChan, awsConf)
+	bot, err := NewBot("test-token", msgChan, awsConf, nil)
 	assert.NoError(t, err)
 
 	// Create a real session but don't open it
@@ -61,7 +61,7 @@ func createTestBotWithMockState(t *testing.T) (*Bot, chan *MessageForCompletion)
 	// tts routine
 	awsConf := tts.LoadConfig()
 
-	bot, err := NewBot("test-token", msgChan, awsConf)
+	bot, err := NewBot("test-token", msgChan, awsConf, nil)
 	assert.NoError(t, err)
 
 	// Create a session with proper state for testing
@@ -87,7 +87,7 @@ func TestNewBot(t *testing.T) {
 		// tts routine
 		awsConf := tts.LoadConfig()
 
-		bot, err := NewBot("test-token", msgChan, awsConf)
+		bot, err := NewBot("test-token", msgChan, awsConf, nil)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, bot)
@@ -102,7 +102,7 @@ func TestNewBot(t *testing.T) {
 		// tts routine
 		awsConf := tts.LoadConfig()
 
-		bot, err := NewBot("", msgChan, awsConf)
+		bot, err := NewBot("", msgChan, awsConf, nil)
 
 		// Bot creation should still succeed even with empty token
 		assert.NoError(t, err)
@@ -113,7 +113,7 @@ func TestNewBot(t *testing.T) {
 		// tts routine
 		awsConf := tts.LoadConfig()
 
-		bot, err := NewBot("test-token", nil, awsConf)
+		bot, err := NewBot("test-token", nil, awsConf, nil)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, bot)

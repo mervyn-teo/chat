@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,7 @@ type Bot struct {
 	transcribeChannel chan *transcribe.Msg           // Channel for transcription messages
 	awsConfig         aws.Config                     // AWS configuration for TTS
 	transcribeQueue   map[string]map[string][]string // Queue for transcription messages, keyed by guild ID and channel ID, value is file name
+	imageReqChan      chan *ImageDescriptionRequest
 }
 
 // MessageForCompletion represents a message that needs to be processed with a wait message.
@@ -41,12 +43,18 @@ type MessageForCompletion struct {
 	VC          *discordgo.VoiceConnection
 }
 
+type ImageDescriptionRequest struct {
+	AttachmentImg *discordgo.MessageAttachment
+	Description   *string
+}
+
 // NewBot creates a new Bot instance but doesn't connect yet
-func NewBot(token string, msgChan chan *MessageForCompletion, awsConf aws.Config) (*Bot, error) {
+func NewBot(token string, msgChan chan *MessageForCompletion, awsConf aws.Config, imageReqChan chan *ImageDescriptionRequest) (*Bot, error) {
 	b := &Bot{
 		Token:          token,
 		messageChannel: msgChan,
 		awsConfig:      awsConf,
+		imageReqChan:   imageReqChan,
 	}
 
 	b.transcribeChannel = make(chan *transcribe.Msg)
@@ -174,12 +182,26 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		*/
 
 		if m.ReferencedMessage != nil {
+			craftedMessage := m.ReferencedMessage.Content
+			imageDescriptions := strings.Builder{}
+			if m.ReferencedMessage.Attachments != nil {
+				for i, attachment := range m.ReferencedMessage.Attachments {
+					if strings.HasPrefix(attachment.ContentType, "image/") {
+						imageDescriptions.WriteString("{\n\"index\" : " + strconv.Itoa(i) + ",\n\"description\": " + b.getImageDescription(attachment) + "}, \n")
+					}
+				}
+			}
+
+			if imageDescriptions.Len() > 0 {
+				craftedMessage = "{\n \"images\" : " + imageDescriptions.String() + "}\n" + craftedMessage
+			}
+
 			referMsg := fmt.Sprintf(
 				"{\n"+
 					"\"referenced_message\": \"%s\", \n"+
 					"\"referenced_message_author\": \"%s\"\n"+
 					"\"message\":\"%s\"\n"+
-					"}", m.ReferencedMessage.Content, m.ReferencedMessage.Author.ID, m.Content)
+					"}", craftedMessage, m.ReferencedMessage.Author.ID, m.Content)
 			m.Content = referMsg
 		} else {
 			referMsg := fmt.Sprintf(
@@ -269,6 +291,22 @@ func (b *Bot) newMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		} else {
 			log.Println("No transcription in progress to stop.")
 		}
+	}
+}
+
+func (b *Bot) getImageDescription(attachment *discordgo.MessageAttachment) string {
+	imageReq := ImageDescriptionRequest{
+		Description:   nil,
+		AttachmentImg: attachment,
+	}
+
+	b.imageReqChan <- &imageReq
+
+	for {
+		if imageReq.Description != nil {
+			return *imageReq.Description
+		}
+		time.Sleep(100 * time.Millisecond) // busy waiting, maybe not the best method
 	}
 }
 

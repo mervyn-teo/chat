@@ -51,11 +51,14 @@ func main() {
 	// Shared channel for communication between bot and router
 	messageChannel := make(chan *bot.MessageForCompletion)
 
+	// Channel for requesting image descriptions
+	imageRequestChannel := make(chan *bot.ImageDescriptionRequest)
+
 	// tts routine
 	awsConf := tts.LoadConfig()
 
 	// Create the bot instance
-	myBot, err := bot.NewBot(settings.DiscordToken, messageChannel, awsConf)
+	myBot, err := bot.NewBot(settings.DiscordToken, messageChannel, awsConf, imageRequestChannel)
 	if err != nil {
 		log.Fatalf("Failed to create Discord bot: %v", err)
 	}
@@ -74,7 +77,7 @@ func main() {
 	go func() {
 		defer wg.Done() // Signal completion when this goroutine exits
 		// Pass the cancellable context to the loop
-		router.MessageLoop(ctx, myBot, client, messageChannel, settings.Instructions, messages, settings.ChatHistoryFilePath, settings.Instructions)
+		router.MessageLoop(ctx, myBot, client, messageChannel, settings.Instructions, messages, settings.ChatHistoryFilePath, settings.Instructions, imageRequestChannel)
 		log.Println("Router loop stopped.")
 	}()
 

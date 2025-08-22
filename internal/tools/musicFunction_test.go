@@ -70,7 +70,7 @@ func (suite *MusicTestSuite) setupBot() {
 	// tts routine
 	awsConf := tts.LoadConfig()
 
-	suite.bot, err = bot.NewBot(settings.DiscordToken, suite.messageChannel, awsConf)
+	suite.bot, err = bot.NewBot(settings.DiscordToken, suite.messageChannel, awsConf, nil)
 	require.NoError(suite.T(), err, "Failed to create bot")
 
 	// Start bot in goroutine

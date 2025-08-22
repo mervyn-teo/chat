@@ -89,7 +89,7 @@ func LoadSettings(filePath string) (Settings, error) {
 
 func setUpSettings(filepath string) {
 	var openRouterApi string
-	var discodToken string
+	var discordToken string
 	var newsApi string
 	var youtubeApi string
 
@@ -108,7 +108,7 @@ func setUpSettings(filepath string) {
 	}
 
 	fmt.Println("Please enter your Discord bot token: ")
-	n, err = fmt.Scanf("%s", &discodToken)
+	n, err = fmt.Scanf("%s", &discordToken)
 
 	if err != nil {
 		log.Fatalln("Error reading Discord bot token:", err)
@@ -151,7 +151,7 @@ func setUpSettings(filepath string) {
 		fmt.Println("Using default settings.")
 		defaultSettings := Settings{
 			ApiKey:       openRouterApi,
-			DiscordToken: discodToken,
+			DiscordToken: discordToken,
 			Instructions: "You are a helpful assistant.",
 			Model:        "gpt-3.5-turbo",
 			NewsAPIToken: newsApi,
@@ -181,7 +181,7 @@ func setUpSettings(filepath string) {
 		return
 	}
 	Setting.ApiKey = openRouterApi
-	Setting.DiscordToken = discodToken
+	Setting.DiscordToken = discordToken
 	Setting.NewsAPIToken = newsApi
 	Setting.YoutubeToken = youtubeApi
 	file, err := json.MarshalIndent(Setting, "", " ")
